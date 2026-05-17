@@ -1,0 +1,10 @@
+[package]
+name = "rusty_me"
+version = "0.1.0"
+edition = "2024"
+description = "A small Rust parser playground prepared for fuzzing"
+license = "MIT"
+
+[lib]
+name = "rusty_me"
+path = "src/lib.rs"

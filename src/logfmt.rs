@@ -28,8 +28,36 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 /// Parses a logfmt input string into key-value fields.
 ///
 /// The parser is intentionally small at first so fuzzing can drive its growth.
-pub fn parse(_input: &str) -> Vec<(String, String)> {
-    Vec::new()
+pub fn parse(input: &str) -> Vec<(String, String)> {
+    let tokens = tokenize(input);
+    let mut fields = Vec::new();
+    let mut cursor = 0;
+
+    while cursor < tokens.len() {
+        match tokens.get(cursor) {
+            Some(Token::Atom(key)) => {
+                match (tokens.get(cursor + 1), tokens.get(cursor + 2)) {
+                    (Some(Token::Equal), Some(Token::Atom(value))) => {
+                        fields.push((key.clone(), value.clone()));
+                        cursor += 3;
+                    }
+                    (Some(Token::Equal), _) => {
+                        fields.push((key.clone(), String::new()));
+                        cursor += 2;
+                    }
+                    _ => {
+                        fields.push((key.clone(), String::new()));
+                        cursor += 1;
+                    }
+                }
+            }
+            Some(Token::Equal) | None => {
+                cursor += 1;
+            }
+        }
+    }
+
+    fields
 }
 
 #[cfg(test)]
@@ -39,6 +67,29 @@ mod tests {
     #[test]
     fn empty_input_returns_no_fields() {
         assert!(parse("").is_empty());
+    }
+
+    #[test]
+    fn parse_reads_simple_pairs() {
+        let fields = parse("level=info msg=hello");
+
+        assert_eq!(
+            fields,
+            vec![
+                ("level".into(), "info".into()),
+                ("msg".into(), "hello".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_preserves_bare_keys_as_flags() {
+        let fields = parse("debug trace=true");
+
+        assert_eq!(
+            fields,
+            vec![("debug".into(), String::new()), ("trace".into(), "true".into())]
+        );
     }
 
     #[test]

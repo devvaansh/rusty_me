@@ -1,0 +1,3 @@
+level=info msg=hello
+trace=true request_id=abc123
+flag_only

@@ -8,21 +8,113 @@ pub enum Token {
 pub fn tokenize(input: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
 
-    for part in input.split_ascii_whitespace() {
-        if let Some((key, value)) = part.split_once('=') {
-            if !key.is_empty() {
-                tokens.push(Token::Atom(key.to_owned()));
+    let mut cursor = input.chars().peekable();
+
+    while let Some(ch) = cursor.peek() {
+        if ch.is_ascii_whitespace() {
+            cursor.next();
+            continue;
+        }
+
+        if *ch == '"' {
+            cursor.next();
+            tokens.push(Token::Atom(read_quoted_value(&mut cursor)));
+            continue;
+        }
+
+        let atom = read_until_delimiter(&mut cursor);
+
+        if matches!(cursor.peek(), Some('=')) {
+            if !atom.is_empty() {
+                tokens.push(Token::Atom(atom));
             }
+
+            cursor.next();
             tokens.push(Token::Equal);
-            if !value.is_empty() {
-                tokens.push(Token::Atom(value.to_owned()));
+
+            match cursor.peek() {
+                Some('"') => {
+                    cursor.next();
+                    tokens.push(Token::Atom(read_quoted_value(&mut cursor)));
+                }
+                Some(next) if !next.is_ascii_whitespace() => {
+                    let value = read_until_whitespace(&mut cursor);
+                    tokens.push(Token::Atom(value));
+                }
+                _ => {}
             }
-        } else {
-            tokens.push(Token::Atom(part.to_owned()));
+        } else if !atom.is_empty() {
+            tokens.push(Token::Atom(atom));
         }
     }
 
     tokens
+}
+
+fn read_until_delimiter<I>(cursor: &mut std::iter::Peekable<I>) -> String
+where
+    I: Iterator<Item = char>,
+{
+    let mut atom = String::new();
+
+    while let Some(ch) = cursor.peek() {
+        if ch.is_ascii_whitespace() || *ch == '=' {
+            break;
+        }
+
+        atom.push(*ch);
+        cursor.next();
+    }
+
+    atom
+}
+
+fn read_until_whitespace<I>(cursor: &mut std::iter::Peekable<I>) -> String
+where
+    I: Iterator<Item = char>,
+{
+    let mut value = String::new();
+
+    while let Some(ch) = cursor.peek() {
+        if ch.is_ascii_whitespace() {
+            break;
+        }
+
+        value.push(*ch);
+        cursor.next();
+    }
+
+    value
+}
+
+fn read_quoted_value<I>(cursor: &mut std::iter::Peekable<I>) -> String
+where
+    I: Iterator<Item = char>,
+{
+    let mut value = String::new();
+
+    while let Some(ch) = cursor.next() {
+        match ch {
+            '"' => break,
+            '\\' => {
+                if let Some(escaped) = cursor.next() {
+                    value.push(match escaped {
+                        '"' => '"',
+                        '\\' => '\\',
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        other => other,
+                    });
+                } else {
+                    value.push('\\');
+                }
+            }
+            other => value.push(other),
+        }
+    }
+
+    value
 }
 
 /// Parses a logfmt input string into key-value fields.
@@ -35,22 +127,20 @@ pub fn parse(input: &str) -> Vec<(String, String)> {
 
     while cursor < tokens.len() {
         match tokens.get(cursor) {
-            Some(Token::Atom(key)) => {
-                match (tokens.get(cursor + 1), tokens.get(cursor + 2)) {
-                    (Some(Token::Equal), Some(Token::Atom(value))) => {
-                        fields.push((key.clone(), value.clone()));
-                        cursor += 3;
-                    }
-                    (Some(Token::Equal), _) => {
-                        fields.push((key.clone(), String::new()));
-                        cursor += 2;
-                    }
-                    _ => {
-                        fields.push((key.clone(), String::new()));
-                        cursor += 1;
-                    }
+            Some(Token::Atom(key)) => match (tokens.get(cursor + 1), tokens.get(cursor + 2)) {
+                (Some(Token::Equal), Some(Token::Atom(value))) => {
+                    fields.push((key.clone(), value.clone()));
+                    cursor += 3;
                 }
-            }
+                (Some(Token::Equal), _) => {
+                    fields.push((key.clone(), String::new()));
+                    cursor += 2;
+                }
+                _ => {
+                    fields.push((key.clone(), String::new()));
+                    cursor += 1;
+                }
+            },
             Some(Token::Equal) | None => {
                 cursor += 1;
             }
@@ -62,7 +152,7 @@ pub fn parse(input: &str) -> Vec<(String, String)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse, tokenize, Token};
+    use super::{Token, parse, tokenize};
 
     #[test]
     fn empty_input_returns_no_fields() {
@@ -88,8 +178,44 @@ mod tests {
 
         assert_eq!(
             fields,
-            vec![("debug".into(), String::new()), ("trace".into(), "true".into())]
+            vec![
+                ("debug".into(), String::new()),
+                ("trace".into(), "true".into())
+            ]
         );
+    }
+
+    #[test]
+    fn parse_supports_quoted_values_with_spaces() {
+        let fields = parse("level=info msg=\"hello world\"");
+
+        assert_eq!(
+            fields,
+            vec![
+                ("level".into(), "info".into()),
+                ("msg".into(), "hello world".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_unescapes_common_sequences_in_quoted_values() {
+        let fields = parse("msg=\"line 1\\nline 2\" quote=\"say \\\"hi\\\"\"");
+
+        assert_eq!(
+            fields,
+            vec![
+                ("msg".into(), "line 1\nline 2".into()),
+                ("quote".into(), "say \"hi\"".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_tolerates_unterminated_quoted_values() {
+        let fields = parse("msg=\"hello world");
+
+        assert_eq!(fields, vec![("msg".into(), "hello world".into())]);
     }
 
     #[test]
@@ -114,5 +240,36 @@ mod tests {
         let tokens = tokenize("orphan");
 
         assert_eq!(tokens, vec![Token::Atom("orphan".into())]);
+    }
+
+    #[test]
+    fn tokenize_reads_quoted_values_as_single_atoms() {
+        let tokens = tokenize("msg=\"hello world\" path=bare");
+
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Atom("msg".into()),
+                Token::Equal,
+                Token::Atom("hello world".into()),
+                Token::Atom("path".into()),
+                Token::Equal,
+                Token::Atom("bare".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn tokenize_keeps_empty_quoted_values() {
+        let tokens = tokenize("msg=\"\"");
+
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Atom("msg".into()),
+                Token::Equal,
+                Token::Atom(String::new()),
+            ]
+        );
     }
 }

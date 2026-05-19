@@ -1,0 +1,4 @@
+msg="hello world"
+path="/var/log/app.log"
+quote="say \"hi\""
+multiline="line 1\nline 2"

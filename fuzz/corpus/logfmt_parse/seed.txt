@@ -1,3 +1,6 @@
 level=info msg=hello
 trace=true request_id=abc123
 flag_only
+msg="hello world"
+empty=
+level=info level=warn

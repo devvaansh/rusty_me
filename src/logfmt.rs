@@ -4,6 +4,32 @@ pub enum Token {
     Equal,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Field {
+    pub key: String,
+    pub value: Option<String>,
+}
+
+impl Field {
+    pub fn flag(key: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            value: None,
+        }
+    }
+
+    pub fn pair(key: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            value: Some(value.into()),
+        }
+    }
+
+    pub fn is_flag(&self) -> bool {
+        self.value.is_none()
+    }
+}
+
 /// Breaks a logfmt input into a minimal token stream.
 pub fn tokenize(input: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
@@ -121,6 +147,14 @@ where
 ///
 /// The parser is intentionally small at first so fuzzing can drive its growth.
 pub fn parse(input: &str) -> Vec<(String, String)> {
+    parse_fields(input)
+        .into_iter()
+        .map(|field| (field.key, field.value.unwrap_or_default()))
+        .collect()
+}
+
+/// Parses a logfmt input string into structured fields.
+pub fn parse_fields(input: &str) -> Vec<Field> {
     let tokens = tokenize(input);
     let mut fields = Vec::new();
     let mut cursor = 0;
@@ -129,15 +163,18 @@ pub fn parse(input: &str) -> Vec<(String, String)> {
         match tokens.get(cursor) {
             Some(Token::Atom(key)) => match (tokens.get(cursor + 1), tokens.get(cursor + 2)) {
                 (Some(Token::Equal), Some(Token::Atom(value))) => {
-                    fields.push((key.clone(), value.clone()));
+                    fields.push(Field::pair(key.clone(), value.clone()));
                     cursor += 3;
                 }
                 (Some(Token::Equal), _) => {
-                    fields.push((key.clone(), String::new()));
+                    fields.push(Field {
+                        key: key.clone(),
+                        value: Some(String::new()),
+                    });
                     cursor += 2;
                 }
                 _ => {
-                    fields.push((key.clone(), String::new()));
+                    fields.push(Field::flag(key.clone()));
                     cursor += 1;
                 }
             },
@@ -152,7 +189,7 @@ pub fn parse(input: &str) -> Vec<(String, String)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Token, parse, tokenize};
+    use super::{Field, Token, parse, parse_fields, tokenize};
 
     #[test]
     fn empty_input_returns_no_fields() {
@@ -216,6 +253,26 @@ mod tests {
         let fields = parse("msg=\"hello world");
 
         assert_eq!(fields, vec![("msg".into(), "hello world".into())]);
+    }
+
+    #[test]
+    fn parse_fields_preserves_flags_and_values() {
+        let fields = parse_fields("debug level=info empty=");
+
+        assert_eq!(
+            fields,
+            vec![
+                Field::flag("debug"),
+                Field::pair("level", "info"),
+                Field::pair("empty", "")
+            ]
+        );
+    }
+
+    #[test]
+    fn field_knows_when_it_is_a_flag() {
+        assert!(Field::flag("debug").is_flag());
+        assert!(!Field::pair("level", "info").is_flag());
     }
 
     #[test]

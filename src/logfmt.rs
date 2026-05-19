@@ -350,10 +350,36 @@ pub fn parse_strict(input: &str) -> Result<Vec<Field>, ParseError> {
     Ok(fields)
 }
 
+/// Parses a logfmt input string into a last-write-wins map.
+pub fn parse_to_map(input: &str) -> std::collections::BTreeMap<String, Option<String>> {
+    fields_to_map(parse_fields(input))
+}
+
+/// Parses a logfmt input string into a last-write-wins map and surfaces malformed input.
+pub fn parse_to_map_strict(
+    input: &str,
+) -> Result<std::collections::BTreeMap<String, Option<String>>, ParseError> {
+    parse_strict(input).map(fields_to_map)
+}
+
+fn fields_to_map<I>(fields: I) -> std::collections::BTreeMap<String, Option<String>>
+where
+    I: IntoIterator<Item = Field>,
+{
+    let mut map = std::collections::BTreeMap::new();
+
+    for field in fields {
+        map.insert(field.key, field.value);
+    }
+
+    map
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        Field, ParseError, ParseErrorKind, Token, parse, parse_fields, parse_strict, tokenize,
+        Field, ParseError, ParseErrorKind, Token, parse, parse_fields, parse_strict, parse_to_map,
+        parse_to_map_strict, tokenize,
     };
 
     #[test]
@@ -489,6 +515,27 @@ mod tests {
             ParseError {
                 position: 4,
                 kind: ParseErrorKind::UnterminatedQuote
+            }
+        );
+    }
+
+    #[test]
+    fn parse_to_map_preserves_flags_and_uses_last_value() {
+        let fields = parse_to_map("debug level=info level=warn");
+
+        assert_eq!(fields.get("debug"), Some(&None));
+        assert_eq!(fields.get("level"), Some(&Some("warn".into())));
+    }
+
+    #[test]
+    fn parse_to_map_strict_propagates_parse_errors() {
+        let error = parse_to_map_strict("=broken").unwrap_err();
+
+        assert_eq!(
+            error,
+            ParseError {
+                position: 0,
+                kind: ParseErrorKind::MissingKey
             }
         );
     }

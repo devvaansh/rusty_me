@@ -10,6 +10,19 @@ pub struct Field {
     pub value: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParseErrorKind {
+    MissingKey,
+    UnexpectedQuote,
+    UnterminatedQuote,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseError {
+    pub position: usize,
+    pub kind: ParseErrorKind,
+}
+
 impl Field {
     pub fn flag(key: impl Into<String>) -> Self {
         Self {
@@ -29,6 +42,24 @@ impl Field {
         self.value.is_none()
     }
 }
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.kind {
+            ParseErrorKind::MissingKey => {
+                write!(f, "missing key before '=' at byte {}", self.position)
+            }
+            ParseErrorKind::UnexpectedQuote => {
+                write!(f, "unexpected quoted token at byte {}", self.position)
+            }
+            ParseErrorKind::UnterminatedQuote => {
+                write!(f, "unterminated quoted value at byte {}", self.position)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ParseError {}
 
 /// Breaks a logfmt input into a minimal token stream.
 pub fn tokenize(input: &str) -> Vec<Token> {
@@ -95,6 +126,24 @@ where
     atom
 }
 
+fn read_until_delimiter_with_spans<I>(cursor: &mut std::iter::Peekable<I>) -> String
+where
+    I: Iterator<Item = (usize, char)>,
+{
+    let mut atom = String::new();
+
+    while let Some((_, ch)) = cursor.peek() {
+        if ch.is_ascii_whitespace() || *ch == '=' {
+            break;
+        }
+
+        atom.push(*ch);
+        cursor.next();
+    }
+
+    atom
+}
+
 fn read_until_whitespace<I>(cursor: &mut std::iter::Peekable<I>) -> String
 where
     I: Iterator<Item = char>,
@@ -102,6 +151,24 @@ where
     let mut value = String::new();
 
     while let Some(ch) = cursor.peek() {
+        if ch.is_ascii_whitespace() {
+            break;
+        }
+
+        value.push(*ch);
+        cursor.next();
+    }
+
+    value
+}
+
+fn read_until_whitespace_with_spans<I>(cursor: &mut std::iter::Peekable<I>) -> String
+where
+    I: Iterator<Item = (usize, char)>,
+{
+    let mut value = String::new();
+
+    while let Some((_, ch)) = cursor.peek() {
         if ch.is_ascii_whitespace() {
             break;
         }
@@ -141,6 +208,45 @@ where
     }
 
     value
+}
+
+fn read_quoted_value_strict<I>(
+    cursor: &mut std::iter::Peekable<I>,
+    quote_position: usize,
+) -> Result<String, ParseError>
+where
+    I: Iterator<Item = (usize, char)>,
+{
+    let mut value = String::new();
+
+    while let Some((_, ch)) = cursor.next() {
+        match ch {
+            '"' => return Ok(value),
+            '\\' => {
+                if let Some((_, escaped)) = cursor.next() {
+                    value.push(match escaped {
+                        '"' => '"',
+                        '\\' => '\\',
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        other => other,
+                    });
+                } else {
+                    return Err(ParseError {
+                        position: quote_position,
+                        kind: ParseErrorKind::UnterminatedQuote,
+                    });
+                }
+            }
+            other => value.push(other),
+        }
+    }
+
+    Err(ParseError {
+        position: quote_position,
+        kind: ParseErrorKind::UnterminatedQuote,
+    })
 }
 
 /// Parses a logfmt input string into key-value fields.
@@ -187,9 +293,68 @@ pub fn parse_fields(input: &str) -> Vec<Field> {
     fields
 }
 
+/// Parses a logfmt input string and returns a structured error for malformed input.
+pub fn parse_strict(input: &str) -> Result<Vec<Field>, ParseError> {
+    let mut fields = Vec::new();
+    let mut cursor = input.char_indices().peekable();
+
+    while let Some((position, ch)) = cursor.peek().copied() {
+        if ch.is_ascii_whitespace() {
+            cursor.next();
+            continue;
+        }
+
+        if ch == '=' {
+            return Err(ParseError {
+                position,
+                kind: ParseErrorKind::MissingKey,
+            });
+        }
+
+        if ch == '"' {
+            return Err(ParseError {
+                position,
+                kind: ParseErrorKind::UnexpectedQuote,
+            });
+        }
+
+        let key = read_until_delimiter_with_spans(&mut cursor);
+
+        if matches!(cursor.peek(), Some((_, '='))) {
+            let equal_position = cursor.next().map(|(pos, _)| pos).unwrap_or(position);
+
+            if key.is_empty() {
+                return Err(ParseError {
+                    position: equal_position,
+                    kind: ParseErrorKind::MissingKey,
+                });
+            }
+
+            let value = match cursor.peek().copied() {
+                Some((quote_position, '"')) => {
+                    cursor.next();
+                    read_quoted_value_strict(&mut cursor, quote_position)?
+                }
+                Some((_, next)) if !next.is_ascii_whitespace() => {
+                    read_until_whitespace_with_spans(&mut cursor)
+                }
+                _ => String::new(),
+            };
+
+            fields.push(Field::pair(key, value));
+        } else {
+            fields.push(Field::flag(key));
+        }
+    }
+
+    Ok(fields)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Field, Token, parse, parse_fields, tokenize};
+    use super::{
+        Field, ParseError, ParseErrorKind, Token, parse, parse_fields, parse_strict, tokenize,
+    };
 
     #[test]
     fn empty_input_returns_no_fields() {
@@ -273,6 +438,59 @@ mod tests {
     fn field_knows_when_it_is_a_flag() {
         assert!(Field::flag("debug").is_flag());
         assert!(!Field::pair("level", "info").is_flag());
+    }
+
+    #[test]
+    fn parse_strict_accepts_valid_input() {
+        let fields = parse_strict("debug level=info msg=\"hello world\"").unwrap();
+
+        assert_eq!(
+            fields,
+            vec![
+                Field::flag("debug"),
+                Field::pair("level", "info"),
+                Field::pair("msg", "hello world")
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_strict_rejects_missing_keys() {
+        let error = parse_strict("=broken").unwrap_err();
+
+        assert_eq!(
+            error,
+            ParseError {
+                position: 0,
+                kind: ParseErrorKind::MissingKey
+            }
+        );
+    }
+
+    #[test]
+    fn parse_strict_rejects_unexpected_quoted_tokens() {
+        let error = parse_strict("\"orphan\"").unwrap_err();
+
+        assert_eq!(
+            error,
+            ParseError {
+                position: 0,
+                kind: ParseErrorKind::UnexpectedQuote
+            }
+        );
+    }
+
+    #[test]
+    fn parse_strict_rejects_unterminated_quotes() {
+        let error = parse_strict("msg=\"unterminated").unwrap_err();
+
+        assert_eq!(
+            error,
+            ParseError {
+                position: 4,
+                kind: ParseErrorKind::UnterminatedQuote
+            }
+        );
     }
 
     #[test]

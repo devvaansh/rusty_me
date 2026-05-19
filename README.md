@@ -36,3 +36,26 @@ The in-tree parser now handles a small but useful subset of `logfmt`:
 - simple pairs like `level=info`
 - quoted values like `msg="hello world"`
 - common escapes inside quoted values such as `\n`, `\t`, `\\`, and `\"`
+
+## Library entry points
+
+The crate root now re-exports the most useful parsing helpers:
+
+- `tokenize` for low-level token streams
+- `parse` for a tuple-oriented compatibility API
+- `parse_fields` for structured fields with flag awareness
+- `parse_strict` when malformed input should return a typed error
+- `parse_to_map` and `parse_to_map_strict` for last-write-wins map output
+
+Example:
+
+```rust
+use rusty_me::{Field, parse_strict, parse_to_map};
+
+let fields = parse_strict("debug level=info msg=\"hello world\"")?;
+assert_eq!(fields[0], Field::flag("debug"));
+
+let map = parse_to_map("level=info level=warn");
+assert_eq!(map.get("level"), Some(&Some(String::from("warn"))));
+# Ok::<(), rusty_me::ParseError>(())
+```

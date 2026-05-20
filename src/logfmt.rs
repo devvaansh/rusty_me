@@ -41,6 +41,13 @@ impl Field {
     pub fn is_flag(&self) -> bool {
         self.value.is_none()
     }
+
+    #[must_use]
+    pub fn encode(&self) -> String {
+        let mut out = String::new();
+        push_encoded_field(&mut out, self);
+        out
+    }
 }
 
 impl std::fmt::Display for ParseError {
@@ -362,6 +369,43 @@ pub fn parse_to_map_strict(
     parse_strict(input).map(fields_to_map)
 }
 
+/// Encodes a sequence of structured fields into normalized logfmt text.
+#[must_use]
+pub fn encode_fields(fields: &[Field]) -> String {
+    let mut out = String::new();
+
+    for (index, field) in fields.iter().enumerate() {
+        if index > 0 {
+            out.push(' ');
+        }
+
+        push_encoded_field(&mut out, field);
+    }
+
+    out
+}
+
+/// Encodes a last-write-wins map into normalized logfmt text.
+#[must_use]
+pub fn encode_map(map: &std::collections::BTreeMap<String, Option<String>>) -> String {
+    let mut out = String::new();
+
+    for (index, (key, value)) in map.iter().enumerate() {
+        if index > 0 {
+            out.push(' ');
+        }
+
+        push_encoded_key(&mut out, key);
+
+        if let Some(value) = value {
+            out.push('=');
+            push_encoded_value(&mut out, value);
+        }
+    }
+
+    out
+}
+
 fn fields_to_map<I>(fields: I) -> std::collections::BTreeMap<String, Option<String>>
 where
     I: IntoIterator<Item = Field>,
@@ -375,11 +419,56 @@ where
     map
 }
 
+fn push_encoded_field(out: &mut String, field: &Field) {
+    push_encoded_key(out, &field.key);
+
+    if let Some(value) = &field.value {
+        out.push('=');
+        push_encoded_value(out, value);
+    }
+}
+
+fn push_encoded_key(out: &mut String, key: &str) {
+    out.push_str(key);
+}
+
+fn push_encoded_value(out: &mut String, value: &str) {
+    if value.is_empty() {
+        out.push_str("\"\"");
+        return;
+    }
+
+    if value_needs_quotes(value) {
+        out.push('"');
+
+        for ch in value.chars() {
+            match ch {
+                '"' => out.push_str("\\\""),
+                '\\' => out.push_str("\\\\"),
+                '\n' => out.push_str("\\n"),
+                '\r' => out.push_str("\\r"),
+                '\t' => out.push_str("\\t"),
+                other => out.push(other),
+            }
+        }
+
+        out.push('"');
+    } else {
+        out.push_str(value);
+    }
+}
+
+fn value_needs_quotes(value: &str) -> bool {
+    value
+        .chars()
+        .any(|ch| ch.is_ascii_whitespace() || matches!(ch, '"' | '\\' | '\n' | '\r' | '\t'))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        Field, ParseError, ParseErrorKind, Token, parse, parse_fields, parse_strict, parse_to_map,
-        parse_to_map_strict, tokenize,
+        Field, ParseError, ParseErrorKind, Token, encode_fields, encode_map, parse, parse_fields,
+        parse_strict, parse_to_map, parse_to_map_strict, tokenize,
     };
 
     #[test]
@@ -538,6 +627,51 @@ mod tests {
                 kind: ParseErrorKind::MissingKey
             }
         );
+    }
+
+    #[test]
+    fn field_encode_emits_flags_and_pairs() {
+        assert_eq!(Field::flag("debug").encode(), "debug");
+        assert_eq!(Field::pair("level", "info").encode(), "level=info");
+    }
+
+    #[test]
+    fn encode_fields_quotes_and_escapes_special_values() {
+        let encoded = encode_fields(&[
+            Field::flag("debug"),
+            Field::pair("msg", "hello world"),
+            Field::pair("quote", "say \"hi\""),
+            Field::pair("empty", ""),
+        ]);
+
+        assert_eq!(
+            encoded,
+            "debug msg=\"hello world\" quote=\"say \\\"hi\\\"\" empty=\"\""
+        );
+    }
+
+    #[test]
+    fn encode_fields_roundtrips_through_parse_strict() {
+        let fields = vec![
+            Field::flag("debug"),
+            Field::pair("level", "info"),
+            Field::pair("msg", "hello world"),
+            Field::pair("note", "line 1\nline 2"),
+        ];
+        let encoded = encode_fields(&fields);
+
+        assert_eq!(parse_strict(&encoded).unwrap(), fields);
+    }
+
+    #[test]
+    fn encode_map_uses_sorted_keys_and_quoted_values() {
+        let map = std::collections::BTreeMap::from([
+            (String::from("debug"), None),
+            (String::from("level"), Some(String::from("warn"))),
+            (String::from("msg"), Some(String::from("hello world"))),
+        ]);
+
+        assert_eq!(encode_map(&map), "debug level=warn msg=\"hello world\"");
     }
 
     #[test]

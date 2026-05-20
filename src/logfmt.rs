@@ -406,6 +406,17 @@ pub fn encode_map(map: &std::collections::BTreeMap<String, Option<String>>) -> S
     out
 }
 
+/// Parses and re-encodes logfmt input into a normalized representation.
+#[must_use]
+pub fn normalize(input: &str) -> String {
+    encode_fields(&parse_fields(input))
+}
+
+/// Parses and re-encodes logfmt input, returning malformed input as an error.
+pub fn normalize_strict(input: &str) -> Result<String, ParseError> {
+    parse_strict(input).map(|fields| encode_fields(&fields))
+}
+
 fn fields_to_map<I>(fields: I) -> std::collections::BTreeMap<String, Option<String>>
 where
     I: IntoIterator<Item = Field>,
@@ -467,8 +478,9 @@ fn value_needs_quotes(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        Field, ParseError, ParseErrorKind, Token, encode_fields, encode_map, parse, parse_fields,
-        parse_strict, parse_to_map, parse_to_map_strict, tokenize,
+        Field, ParseError, ParseErrorKind, Token, encode_fields, encode_map, normalize,
+        normalize_strict, parse, parse_fields, parse_strict, parse_to_map, parse_to_map_strict,
+        tokenize,
     };
 
     #[test]
@@ -672,6 +684,33 @@ mod tests {
         ]);
 
         assert_eq!(encode_map(&map), "debug level=warn msg=\"hello world\"");
+    }
+
+    #[test]
+    fn normalize_reencodes_lenient_input() {
+        let normalized = normalize("msg=\"hello world\" debug empty=");
+
+        assert_eq!(normalized, "msg=\"hello world\" debug empty=\"\"");
+    }
+
+    #[test]
+    fn normalize_strict_rejects_malformed_input() {
+        let error = normalize_strict("=broken").unwrap_err();
+
+        assert_eq!(
+            error,
+            ParseError {
+                position: 0,
+                kind: ParseErrorKind::MissingKey
+            }
+        );
+    }
+
+    #[test]
+    fn normalize_strict_roundtrips_valid_input() {
+        let normalized = normalize_strict("debug level=info msg=\"hello world\"").unwrap();
+
+        assert_eq!(normalized, "debug level=info msg=\"hello world\"");
     }
 
     #[test]

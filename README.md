@@ -46,6 +46,7 @@ The crate root now re-exports the most useful parsing helpers:
 - `parse_fields` for structured fields with flag awareness
 - `parse_strict` when malformed input should return a typed error
 - `parse_to_map` and `parse_to_map_strict` for last-write-wins map output
+- `encode_fields`, `encode_map`, `normalize`, and `normalize_strict` for serialization
 
 Example:
 
@@ -58,4 +59,15 @@ assert_eq!(fields[0], Field::flag("debug"));
 let map = parse_to_map("level=info level=warn");
 assert_eq!(map.get("level"), Some(&Some(String::from("warn"))));
 # Ok::<(), rusty_me::ParseError>(())
+```
+
+Normalization example:
+
+```rust
+use rusty_me::normalize;
+
+assert_eq!(
+	normalize("empty= debug msg=\"hello world\""),
+	"empty=\"\" debug msg=\"hello world\""
+);
 ```

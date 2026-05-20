@@ -1,0 +1,3 @@
+debug empty="" msg="hello world"
+level=warn msg="say \"hi\""
+note="line 1\nline 2" tab="a\tb"

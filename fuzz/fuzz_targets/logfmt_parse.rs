@@ -8,6 +8,9 @@ fuzz_target!(|data: &[u8]| {
         let tuples = rusty_me::parse(input);
         let fields = rusty_me::parse_fields(input);
         let map = rusty_me::parse_to_map(input);
+        let encoded_fields = rusty_me::encode_fields(&fields);
+        let encoded_map = rusty_me::encode_map(&map);
+        let normalized = rusty_me::normalize(input);
 
         assert!(!tokens.is_empty() || input.trim().is_empty());
         assert_eq!(tuples.len(), fields.len());
@@ -27,9 +30,14 @@ fuzz_target!(|data: &[u8]| {
         );
         assert_eq!(map, expected_map);
 
+        assert_eq!(rusty_me::parse_fields(&encoded_fields), fields);
+        assert_eq!(rusty_me::parse_to_map(&encoded_map), map);
+        assert_eq!(rusty_me::parse_fields(&normalized), fields);
+
         if let Ok(strict_fields) = rusty_me::parse_strict(input) {
             assert_eq!(strict_fields, fields);
             assert_eq!(rusty_me::parse_to_map_strict(input).unwrap(), map);
+            assert_eq!(rusty_me::normalize_strict(input).unwrap(), encoded_fields);
         }
     }
 });

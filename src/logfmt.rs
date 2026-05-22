@@ -23,6 +23,12 @@ pub struct ParseError {
     pub kind: ParseErrorKind,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LineParseError {
+    pub line: usize,
+    pub error: ParseError,
+}
+
 impl Field {
     pub fn flag(key: impl Into<String>) -> Self {
         Self {
@@ -67,6 +73,18 @@ impl std::fmt::Display for ParseError {
 }
 
 impl std::error::Error for ParseError {}
+
+impl std::fmt::Display for LineParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "line {}: {}", self.line, self.error)
+    }
+}
+
+impl std::error::Error for LineParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
 
 /// Breaks a logfmt input into a minimal token stream.
 pub fn tokenize(input: &str) -> Vec<Token> {
@@ -357,6 +375,30 @@ pub fn parse_strict(input: &str) -> Result<Vec<Field>, ParseError> {
     Ok(fields)
 }
 
+/// Parses newline-delimited logfmt records into structured fields.
+pub fn parse_lines(input: &str) -> Vec<Vec<Field>> {
+    input
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(parse_fields)
+        .collect()
+}
+
+/// Parses newline-delimited logfmt records and reports the failing line on malformed input.
+pub fn parse_lines_strict(input: &str) -> Result<Vec<Vec<Field>>, LineParseError> {
+    input
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .map(|(index, line)| {
+            parse_strict(line).map_err(|error| LineParseError {
+                line: index + 1,
+                error,
+            })
+        })
+        .collect()
+}
+
 /// Parses a logfmt input string into a last-write-wins map.
 pub fn parse_to_map(input: &str) -> std::collections::BTreeMap<String, Option<String>> {
     fields_to_map(parse_fields(input))
@@ -478,9 +520,9 @@ fn value_needs_quotes(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        Field, ParseError, ParseErrorKind, Token, encode_fields, encode_map, normalize,
-        normalize_strict, parse, parse_fields, parse_strict, parse_to_map, parse_to_map_strict,
-        tokenize,
+        Field, LineParseError, ParseError, ParseErrorKind, Token, encode_fields, encode_map,
+        normalize, normalize_strict, parse, parse_fields, parse_lines, parse_lines_strict,
+        parse_strict, parse_to_map, parse_to_map_strict, tokenize,
     };
 
     #[test]
@@ -637,6 +679,44 @@ mod tests {
             ParseError {
                 position: 0,
                 kind: ParseErrorKind::MissingKey
+            }
+        );
+    }
+
+    #[test]
+    fn parse_lines_splits_multiline_input() {
+        let records = parse_lines("level=info\nmsg=hello world\ntrace=true");
+
+        assert_eq!(records.len(), 3);
+        assert_eq!(records[0], vec![Field::pair("level", "info")]);
+        assert_eq!(
+            records[1],
+            vec![Field::pair("msg", "hello"), Field::flag("world")]
+        );
+        assert_eq!(records[2], vec![Field::pair("trace", "true")]);
+    }
+
+    #[test]
+    fn parse_lines_skips_blank_records() {
+        let records = parse_lines("level=info\n\n  \nmsg=hello");
+
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0], vec![Field::pair("level", "info")]);
+        assert_eq!(records[1], vec![Field::pair("msg", "hello")]);
+    }
+
+    #[test]
+    fn parse_lines_strict_reports_the_failing_line() {
+        let error = parse_lines_strict("level=info\n=broken\nmsg=hello").unwrap_err();
+
+        assert_eq!(
+            error,
+            LineParseError {
+                line: 2,
+                error: ParseError {
+                    position: 0,
+                    kind: ParseErrorKind::MissingKey,
+                },
             }
         );
     }

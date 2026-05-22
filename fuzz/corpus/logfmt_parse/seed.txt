@@ -6,3 +6,6 @@ empty=
 level=info level=warn
 note="line 1\nline 2"
 tab="a\tb"
+
+level=info
+msg="hello world"

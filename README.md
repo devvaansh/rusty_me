@@ -45,8 +45,9 @@ The crate root now re-exports the most useful parsing helpers:
 - `parse` for a tuple-oriented compatibility API
 - `parse_fields` for structured fields with flag awareness
 - `parse_strict` when malformed input should return a typed error
+- `parse_lines` and `parse_lines_strict` for newline-delimited records
 - `parse_to_map` and `parse_to_map_strict` for last-write-wins map output
-- `encode_fields`, `encode_map`, `normalize`, and `normalize_strict` for serialization
+- `encode_fields`, `encode_lines`, `encode_map`, `normalize`, `normalize_lines`, and strict variants for serialization
 
 Example:
 
@@ -64,10 +65,10 @@ assert_eq!(map.get("level"), Some(&Some(String::from("warn"))));
 Normalization example:
 
 ```rust
-use rusty_me::normalize;
+use rusty_me::normalize_lines;
 
 assert_eq!(
-	normalize("empty= debug msg=\"hello world\""),
-	"empty=\"\" debug msg=\"hello world\""
+    normalize_lines("empty=\ndebug msg=\"hello world\""),
+    "empty=\"\"\ndebug msg=\"hello world\""
 );
 ```

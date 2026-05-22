@@ -448,6 +448,22 @@ pub fn encode_map(map: &std::collections::BTreeMap<String, Option<String>>) -> S
     out
 }
 
+/// Encodes multiple structured records into newline-delimited logfmt text.
+#[must_use]
+pub fn encode_lines(records: &[Vec<Field>]) -> String {
+    let mut out = String::new();
+
+    for (index, record) in records.iter().enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+
+        out.push_str(&encode_fields(record));
+    }
+
+    out
+}
+
 /// Parses and re-encodes logfmt input into a normalized representation.
 #[must_use]
 pub fn normalize(input: &str) -> String {
@@ -457,6 +473,17 @@ pub fn normalize(input: &str) -> String {
 /// Parses and re-encodes logfmt input, returning malformed input as an error.
 pub fn normalize_strict(input: &str) -> Result<String, ParseError> {
     parse_strict(input).map(|fields| encode_fields(&fields))
+}
+
+/// Parses and re-encodes newline-delimited logfmt input into normalized records.
+#[must_use]
+pub fn normalize_lines(input: &str) -> String {
+    encode_lines(&parse_lines(input))
+}
+
+/// Parses and re-encodes newline-delimited logfmt input, returning the failing line as an error.
+pub fn normalize_lines_strict(input: &str) -> Result<String, LineParseError> {
+    parse_lines_strict(input).map(|records| encode_lines(&records))
 }
 
 fn fields_to_map<I>(fields: I) -> std::collections::BTreeMap<String, Option<String>>
@@ -520,9 +547,10 @@ fn value_needs_quotes(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        Field, LineParseError, ParseError, ParseErrorKind, Token, encode_fields, encode_map,
-        normalize, normalize_strict, parse, parse_fields, parse_lines, parse_lines_strict,
-        parse_strict, parse_to_map, parse_to_map_strict, tokenize,
+        Field, LineParseError, ParseError, ParseErrorKind, Token, encode_fields, encode_lines,
+        encode_map, normalize, normalize_lines, normalize_lines_strict, normalize_strict, parse,
+        parse_fields, parse_lines, parse_lines_strict, parse_strict, parse_to_map,
+        parse_to_map_strict, tokenize,
     };
 
     #[test]
@@ -767,6 +795,19 @@ mod tests {
     }
 
     #[test]
+    fn encode_lines_joins_records_with_newlines() {
+        let records = vec![
+            vec![Field::pair("level", "info")],
+            vec![Field::flag("debug"), Field::pair("msg", "hello world")],
+        ];
+
+        assert_eq!(
+            encode_lines(&records),
+            "level=info\ndebug msg=\"hello world\""
+        );
+    }
+
+    #[test]
     fn normalize_reencodes_lenient_input() {
         let normalized = normalize("msg=\"hello world\" debug empty=");
 
@@ -791,6 +832,32 @@ mod tests {
         let normalized = normalize_strict("debug level=info msg=\"hello world\"").unwrap();
 
         assert_eq!(normalized, "debug level=info msg=\"hello world\"");
+    }
+
+    #[test]
+    fn normalize_lines_reencodes_multiline_input() {
+        let normalized = normalize_lines("level=info\n\ndebug empty=\nmsg=\"hello world\"");
+
+        assert_eq!(
+            normalized,
+            "level=info\ndebug empty=\"\"\nmsg=\"hello world\""
+        );
+    }
+
+    #[test]
+    fn normalize_lines_strict_reports_line_errors() {
+        let error = normalize_lines_strict("level=info\n=broken").unwrap_err();
+
+        assert_eq!(
+            error,
+            LineParseError {
+                line: 2,
+                error: ParseError {
+                    position: 0,
+                    kind: ParseErrorKind::MissingKey,
+                },
+            }
+        );
     }
 
     #[test]

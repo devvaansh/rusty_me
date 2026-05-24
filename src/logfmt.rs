@@ -15,6 +15,11 @@ pub struct Record {
     pub fields: Vec<Field>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Document {
+    pub records: Vec<Record>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseErrorKind {
     MissingKey,
@@ -115,6 +120,35 @@ impl Record {
     }
 }
 
+impl Document {
+    pub fn new(records: Vec<Record>) -> Self {
+        Self { records }
+    }
+
+    pub fn records(&self) -> &[Record] {
+        &self.records
+    }
+
+    pub fn into_records(self) -> Vec<Record> {
+        self.records
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.records.is_empty()
+    }
+
+    #[must_use]
+    pub fn encode(&self) -> String {
+        encode_lines(
+            &self
+                .records
+                .iter()
+                .map(|record| record.fields.clone())
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
 impl From<Vec<Field>> for Record {
     fn from(fields: Vec<Field>) -> Self {
         Self::new(fields)
@@ -124,6 +158,18 @@ impl From<Vec<Field>> for Record {
 impl From<Record> for Vec<Field> {
     fn from(record: Record) -> Self {
         record.fields
+    }
+}
+
+impl From<Vec<Record>> for Document {
+    fn from(records: Vec<Record>) -> Self {
+        Self::new(records)
+    }
+}
+
+impl From<Document> for Vec<Record> {
+    fn from(document: Document) -> Self {
+        document.records
     }
 }
 
@@ -465,6 +511,16 @@ pub fn parse_lines(input: &str) -> Vec<Vec<Field>> {
         .collect()
 }
 
+/// Parses newline-delimited logfmt records into a typed document.
+pub fn parse_document(input: &str) -> Document {
+    Document::from(
+        parse_lines(input)
+            .into_iter()
+            .map(Record::from)
+            .collect::<Vec<_>>(),
+    )
+}
+
 /// Parses newline-delimited logfmt records and reports the failing line on malformed input.
 pub fn parse_lines_strict(input: &str) -> Result<Vec<Vec<Field>>, LineParseError> {
     input
@@ -478,6 +534,12 @@ pub fn parse_lines_strict(input: &str) -> Result<Vec<Vec<Field>>, LineParseError
             })
         })
         .collect()
+}
+
+/// Parses newline-delimited logfmt records into a typed document and reports the failing line on malformed input.
+pub fn parse_document_strict(input: &str) -> Result<Document, LineParseError> {
+    parse_lines_strict(input)
+        .map(|records| Document::from(records.into_iter().map(Record::from).collect::<Vec<_>>()))
 }
 
 /// Parses a logfmt input string into a last-write-wins map.
@@ -567,6 +629,17 @@ pub fn normalize_lines_strict(input: &str) -> Result<String, LineParseError> {
     parse_lines_strict(input).map(|records| encode_lines(&records))
 }
 
+/// Parses and re-encodes newline-delimited logfmt input into a typed document.
+#[must_use]
+pub fn normalize_document(input: &str) -> String {
+    parse_document(input).encode()
+}
+
+/// Parses and re-encodes newline-delimited logfmt input from a typed document, returning the failing line as an error.
+pub fn normalize_document_strict(input: &str) -> Result<String, LineParseError> {
+    parse_document_strict(input).map(|document| document.encode())
+}
+
 fn fields_to_map<I>(fields: I) -> std::collections::BTreeMap<String, Option<String>>
 where
     I: IntoIterator<Item = Field>,
@@ -628,9 +701,10 @@ fn value_needs_quotes(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        Field, LineParseError, ParseError, ParseErrorKind, Record, Token, encode_fields,
-        encode_lines, encode_map, normalize, normalize_lines, normalize_lines_strict,
-        normalize_strict, parse, parse_fields, parse_lines, parse_lines_strict, parse_record,
+        Document, Field, LineParseError, ParseError, ParseErrorKind, Record, Token, encode_fields,
+        encode_lines, encode_map, normalize, normalize_document, normalize_document_strict,
+        normalize_lines, normalize_lines_strict, normalize_strict, parse, parse_document,
+        parse_document_strict, parse_fields, parse_lines, parse_lines_strict, parse_record,
         parse_record_strict, parse_strict, parse_to_map, parse_to_map_strict, tokenize,
     };
 
@@ -858,6 +932,35 @@ mod tests {
     }
 
     #[test]
+    fn parse_document_wraps_line_records() {
+        let document = parse_document("level=info\n\ndebug msg=hello");
+
+        assert_eq!(
+            document,
+            Document::new(vec![
+                Record::new(vec![Field::pair("level", "info")]),
+                Record::new(vec![Field::flag("debug"), Field::pair("msg", "hello")]),
+            ])
+        );
+    }
+
+    #[test]
+    fn parse_document_strict_reports_line_errors() {
+        let error = parse_document_strict("level=info\n=broken").unwrap_err();
+
+        assert_eq!(
+            error,
+            LineParseError {
+                line: 2,
+                error: ParseError {
+                    position: 0,
+                    kind: ParseErrorKind::MissingKey,
+                },
+            }
+        );
+    }
+
+    #[test]
     fn field_encode_emits_flags_and_pairs() {
         assert_eq!(Field::flag("debug").encode(), "debug");
         assert_eq!(Field::pair("level", "info").encode(), "level=info");
@@ -891,6 +994,19 @@ mod tests {
         ]);
 
         assert_eq!(parse_record_strict(&record.encode()).unwrap(), record);
+    }
+
+    #[test]
+    fn document_encode_roundtrips_through_strict_parser() {
+        let document = Document::new(vec![
+            Record::new(vec![Field::pair("level", "info")]),
+            Record::new(vec![
+                Field::flag("debug"),
+                Field::pair("msg", "hello world"),
+            ]),
+        ]);
+
+        assert_eq!(parse_document_strict(&document.encode()).unwrap(), document);
     }
 
     #[test]
@@ -995,6 +1111,17 @@ mod tests {
                     kind: ParseErrorKind::MissingKey,
                 },
             }
+        );
+    }
+
+    #[test]
+    fn normalize_document_matches_line_normalization() {
+        let input = "level=info\n\ndebug empty=\nmsg=\"hello world\"";
+
+        assert_eq!(normalize_document(input), normalize_lines(input));
+        assert_eq!(
+            normalize_document_strict(input).unwrap(),
+            normalize_lines_strict(input).unwrap()
         );
     }
 

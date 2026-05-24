@@ -10,6 +10,11 @@ pub struct Field {
     pub value: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Record {
+    pub fields: Vec<Field>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseErrorKind {
     MissingKey,
@@ -53,6 +58,72 @@ impl Field {
         let mut out = String::new();
         push_encoded_field(&mut out, self);
         out
+    }
+}
+
+impl Record {
+    pub fn new(fields: Vec<Field>) -> Self {
+        Self { fields }
+    }
+
+    pub fn fields(&self) -> &[Field] {
+        &self.fields
+    }
+
+    pub fn into_fields(self) -> Vec<Field> {
+        self.fields
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.fields.is_empty()
+    }
+
+    pub fn find(&self, key: &str) -> Option<&Field> {
+        self.fields.iter().find(|field| field.key == key)
+    }
+
+    pub fn find_last(&self, key: &str) -> Option<&Field> {
+        self.fields.iter().rev().find(|field| field.key == key)
+    }
+
+    pub fn contains_flag(&self, key: &str) -> bool {
+        self.fields
+            .iter()
+            .any(|field| field.key == key && field.is_flag())
+    }
+
+    pub fn get_first_value(&self, key: &str) -> Option<&str> {
+        self.find(key).and_then(|field| field.value.as_deref())
+    }
+
+    pub fn get_last_value(&self, key: &str) -> Option<&str> {
+        self.find_last(key).and_then(|field| field.value.as_deref())
+    }
+
+    pub fn to_map(&self) -> std::collections::BTreeMap<String, Option<String>> {
+        self.fields
+            .iter()
+            .fold(std::collections::BTreeMap::new(), |mut map, field| {
+                map.insert(field.key.clone(), field.value.clone());
+                map
+            })
+    }
+
+    #[must_use]
+    pub fn encode(&self) -> String {
+        encode_fields(&self.fields)
+    }
+}
+
+impl From<Vec<Field>> for Record {
+    fn from(fields: Vec<Field>) -> Self {
+        Self::new(fields)
+    }
+}
+
+impl From<Record> for Vec<Field> {
+    fn from(record: Record) -> Self {
+        record.fields
     }
 }
 
@@ -284,6 +355,11 @@ pub fn parse(input: &str) -> Vec<(String, String)> {
         .collect()
 }
 
+/// Parses a logfmt input string into a typed record.
+pub fn parse_record(input: &str) -> Record {
+    Record::from(parse_fields(input))
+}
+
 /// Parses a logfmt input string into structured fields.
 pub fn parse_fields(input: &str) -> Vec<Field> {
     let tokens = tokenize(input);
@@ -373,6 +449,11 @@ pub fn parse_strict(input: &str) -> Result<Vec<Field>, ParseError> {
     }
 
     Ok(fields)
+}
+
+/// Parses a logfmt input string into a typed record and returns a structured error for malformed input.
+pub fn parse_record_strict(input: &str) -> Result<Record, ParseError> {
+    parse_strict(input).map(Record::from)
 }
 
 /// Parses newline-delimited logfmt records into structured fields.
@@ -547,10 +628,10 @@ fn value_needs_quotes(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        Field, LineParseError, ParseError, ParseErrorKind, Token, encode_fields, encode_lines,
-        encode_map, normalize, normalize_lines, normalize_lines_strict, normalize_strict, parse,
-        parse_fields, parse_lines, parse_lines_strict, parse_strict, parse_to_map,
-        parse_to_map_strict, tokenize,
+        Field, LineParseError, ParseError, ParseErrorKind, Record, Token, encode_fields,
+        encode_lines, encode_map, normalize, normalize_lines, normalize_lines_strict,
+        normalize_strict, parse, parse_fields, parse_lines, parse_lines_strict, parse_record,
+        parse_record_strict, parse_strict, parse_to_map, parse_to_map_strict, tokenize,
     };
 
     #[test]
@@ -628,6 +709,33 @@ mod tests {
                 Field::pair("level", "info"),
                 Field::pair("empty", "")
             ]
+        );
+    }
+
+    #[test]
+    fn parse_record_wraps_fields() {
+        let record = parse_record("debug level=info empty=");
+
+        assert_eq!(
+            record,
+            Record::new(vec![
+                Field::flag("debug"),
+                Field::pair("level", "info"),
+                Field::pair("empty", "")
+            ])
+        );
+    }
+
+    #[test]
+    fn parse_record_strict_preserves_strict_errors() {
+        let error = parse_record_strict("=broken").unwrap_err();
+
+        assert_eq!(
+            error,
+            ParseError {
+                position: 0,
+                kind: ParseErrorKind::MissingKey,
+            }
         );
     }
 
@@ -753,6 +861,36 @@ mod tests {
     fn field_encode_emits_flags_and_pairs() {
         assert_eq!(Field::flag("debug").encode(), "debug");
         assert_eq!(Field::pair("level", "info").encode(), "level=info");
+    }
+
+    #[test]
+    fn record_helpers_expose_lookup_and_map_views() {
+        let record = Record::new(vec![
+            Field::flag("debug"),
+            Field::pair("level", "info"),
+            Field::pair("level", "warn"),
+        ]);
+
+        assert!(!record.is_empty());
+        assert!(record.contains_flag("debug"));
+        assert_eq!(record.get_first_value("level"), Some("info"));
+        assert_eq!(record.get_last_value("level"), Some("warn"));
+        assert_eq!(record.find("debug"), Some(&Field::flag("debug")));
+        assert_eq!(
+            record.to_map().get("level"),
+            Some(&Some(String::from("warn")))
+        );
+    }
+
+    #[test]
+    fn record_encode_roundtrips_through_strict_parser() {
+        let record = Record::new(vec![
+            Field::flag("debug"),
+            Field::pair("msg", "hello world"),
+            Field::pair("empty", ""),
+        ]);
+
+        assert_eq!(parse_record_strict(&record.encode()).unwrap(), record);
     }
 
     #[test]

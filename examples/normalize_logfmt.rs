@@ -4,7 +4,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
-    let normalized = rusty_me::normalize_lines_strict(input.trim_end())?;
+    let document = rusty_me::parse_document_strict(input.trim_end())?;
+    let normalized = document.encode();
     println!("{normalized}");
 
     Ok(())

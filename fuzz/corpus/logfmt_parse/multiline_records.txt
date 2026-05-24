@@ -3,3 +3,6 @@ msg="hello world"
 
 debug empty=
 note="line 1\nline 2"
+
+level=info level=warn
+debug

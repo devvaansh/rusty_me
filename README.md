@@ -44,18 +44,26 @@ The crate root now re-exports the most useful parsing helpers:
 - `tokenize` for low-level token streams
 - `parse` for a tuple-oriented compatibility API
 - `parse_fields` for structured fields with flag awareness
+- `parse_record` and `parse_record_strict` for typed single-record APIs
 - `parse_strict` when malformed input should return a typed error
+- `parse_document` and `parse_document_strict` for typed multi-record APIs
 - `parse_lines` and `parse_lines_strict` for newline-delimited records
 - `parse_to_map` and `parse_to_map_strict` for last-write-wins map output
 - `encode_fields`, `encode_lines`, `encode_map`, `normalize`, `normalize_lines`, and strict variants for serialization
 
+Typed wrappers are also available:
+
+- `Record` offers key lookup helpers like `find`, `get_first_value`, and `to_map`
+- `Document` groups newline-delimited `Record` values and can encode back to text
+
 Example:
 
 ```rust
-use rusty_me::{Field, parse_strict, parse_to_map};
+use rusty_me::{Field, parse_record_strict, parse_to_map};
 
-let fields = parse_strict("debug level=info msg=\"hello world\"")?;
-assert_eq!(fields[0], Field::flag("debug"));
+let record = parse_record_strict("debug level=info msg=\"hello world\"")?;
+assert_eq!(record.fields()[0], Field::flag("debug"));
+assert_eq!(record.get_first_value("level"), Some("info"));
 
 let map = parse_to_map("level=info level=warn");
 assert_eq!(map.get("level"), Some(&Some(String::from("warn"))));
@@ -65,10 +73,10 @@ assert_eq!(map.get("level"), Some(&Some(String::from("warn"))));
 Normalization example:
 
 ```rust
-use rusty_me::normalize_lines;
+use rusty_me::normalize_document_strict;
 
 assert_eq!(
-    normalize_lines("empty=\ndebug msg=\"hello world\""),
+    normalize_document_strict("empty=\ndebug msg=\"hello world\"").unwrap(),
     "empty=\"\"\ndebug msg=\"hello world\""
 );
 ```

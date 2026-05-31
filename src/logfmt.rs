@@ -1012,6 +1012,25 @@ mod tests {
     }
 
     #[test]
+    fn record_iteration_reports_length_and_visits_each_field() {
+        let record = Record::new(vec![
+            Field::flag("debug"),
+            Field::pair("level", "info"),
+            Field::pair("msg", "hello"),
+        ]);
+
+        assert_eq!(record.len(), 3);
+        assert_eq!(record.iter().count(), 3);
+
+        let by_ref: Vec<&Field> = (&record).into_iter().collect();
+        assert_eq!(by_ref.len(), 3);
+        assert_eq!(by_ref[0], &Field::flag("debug"));
+
+        let owned: Vec<Field> = record.into_iter().collect();
+        assert_eq!(owned[2], Field::pair("msg", "hello"));
+    }
+
+    #[test]
     fn record_encode_roundtrips_through_strict_parser() {
         let record = Record::new(vec![
             Field::flag("debug"),

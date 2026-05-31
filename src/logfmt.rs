@@ -83,6 +83,14 @@ impl Record {
         self.fields.is_empty()
     }
 
+    pub fn len(&self) -> usize {
+        self.fields.len()
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, Field> {
+        self.fields.iter()
+    }
+
     pub fn find(&self, key: &str) -> Option<&Field> {
         self.fields.iter().find(|field| field.key == key)
     }
@@ -158,6 +166,24 @@ impl From<Vec<Field>> for Record {
 impl From<Record> for Vec<Field> {
     fn from(record: Record) -> Self {
         record.fields
+    }
+}
+
+impl<'a> IntoIterator for &'a Record {
+    type Item = &'a Field;
+    type IntoIter = std::slice::Iter<'a, Field>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.fields.iter()
+    }
+}
+
+impl IntoIterator for Record {
+    type Item = Field;
+    type IntoIter = std::vec::IntoIter<Field>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.fields.into_iter()
     }
 }
 

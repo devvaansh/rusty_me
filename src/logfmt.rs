@@ -145,6 +145,14 @@ impl Document {
         self.records.is_empty()
     }
 
+    pub fn len(&self) -> usize {
+        self.records.len()
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, Record> {
+        self.records.iter()
+    }
+
     #[must_use]
     pub fn encode(&self) -> String {
         encode_lines(
@@ -196,6 +204,24 @@ impl From<Vec<Record>> for Document {
 impl From<Document> for Vec<Record> {
     fn from(document: Document) -> Self {
         document.records
+    }
+}
+
+impl<'a> IntoIterator for &'a Document {
+    type Item = &'a Record;
+    type IntoIter = std::slice::Iter<'a, Record>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.records.iter()
+    }
+}
+
+impl IntoIterator for Document {
+    type Item = Record;
+    type IntoIter = std::vec::IntoIter<Record>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.records.into_iter()
     }
 }
 
@@ -1028,6 +1054,27 @@ mod tests {
 
         let owned: Vec<Field> = record.into_iter().collect();
         assert_eq!(owned[2], Field::pair("msg", "hello"));
+    }
+
+    #[test]
+    fn document_iteration_reports_length_and_visits_each_record() {
+        let document = Document::new(vec![
+            Record::new(vec![Field::pair("level", "info")]),
+            Record::new(vec![Field::flag("debug"), Field::pair("msg", "hello")]),
+        ]);
+
+        assert_eq!(document.len(), 2);
+        assert_eq!(document.iter().count(), 2);
+
+        let by_ref: Vec<&Record> = (&document).into_iter().collect();
+        assert_eq!(by_ref[0].len(), 1);
+        assert_eq!(by_ref[1].len(), 2);
+
+        let owned: Vec<Record> = document.into_iter().collect();
+        assert_eq!(
+            owned[1].find("msg").unwrap().value.as_deref(),
+            Some("hello")
+        );
     }
 
     #[test]

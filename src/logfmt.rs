@@ -1046,6 +1046,20 @@ mod tests {
     }
 
     #[test]
+    fn record_values_for_returns_every_matching_value_in_order() {
+        let record = Record::new(vec![
+            Field::pair("level", "info"),
+            Field::flag("level"),
+            Field::pair("level", "warn"),
+            Field::pair("msg", "hello"),
+        ]);
+
+        assert_eq!(record.values_for("level"), vec!["info", "warn"]);
+        assert_eq!(record.values_for("msg"), vec!["hello"]);
+        assert!(record.values_for("missing").is_empty());
+    }
+
+    #[test]
     fn record_iteration_reports_length_and_visits_each_field() {
         let record = Record::new(vec![
             Field::flag("debug"),

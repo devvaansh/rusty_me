@@ -113,6 +113,14 @@ impl Record {
         self.find_last(key).and_then(|field| field.value.as_deref())
     }
 
+    pub fn values_for(&self, key: &str) -> Vec<&str> {
+        self.fields
+            .iter()
+            .filter(|field| field.key == key)
+            .filter_map(|field| field.value.as_deref())
+            .collect()
+    }
+
     pub fn to_map(&self) -> std::collections::BTreeMap<String, Option<String>> {
         self.fields
             .iter()

@@ -121,6 +121,19 @@ impl Record {
             .collect()
     }
 
+    pub fn retain<F>(&mut self, mut predicate: F)
+    where
+        F: FnMut(&Field) -> bool,
+    {
+        self.fields.retain(|field| predicate(field));
+    }
+
+    pub fn remove_key(&mut self, key: &str) -> usize {
+        let before = self.fields.len();
+        self.fields.retain(|field| field.key != key);
+        before - self.fields.len()
+    }
+
     pub fn to_map(&self) -> std::collections::BTreeMap<String, Option<String>> {
         self.fields
             .iter()

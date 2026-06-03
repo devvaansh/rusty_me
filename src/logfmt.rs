@@ -1073,6 +1073,38 @@ mod tests {
     }
 
     #[test]
+    fn record_retain_drops_fields_that_fail_the_predicate() {
+        let mut record = Record::new(vec![
+            Field::flag("debug"),
+            Field::pair("level", "info"),
+            Field::pair("msg", "hello"),
+        ]);
+
+        record.retain(|field| field.value.is_some());
+
+        assert_eq!(
+            record,
+            Record::new(vec![
+                Field::pair("level", "info"),
+                Field::pair("msg", "hello"),
+            ])
+        );
+    }
+
+    #[test]
+    fn record_remove_key_returns_number_of_removed_fields() {
+        let mut record = Record::new(vec![
+            Field::pair("level", "info"),
+            Field::pair("level", "warn"),
+            Field::pair("msg", "hello"),
+        ]);
+
+        assert_eq!(record.remove_key("level"), 2);
+        assert_eq!(record.remove_key("missing"), 0);
+        assert_eq!(record, Record::new(vec![Field::pair("msg", "hello")]));
+    }
+
+    #[test]
     fn record_iteration_reports_length_and_visits_each_field() {
         let record = Record::new(vec![
             Field::flag("debug"),

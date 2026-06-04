@@ -134,6 +134,17 @@ impl Record {
         before - self.fields.len()
     }
 
+    pub fn push(&mut self, field: Field) {
+        self.fields.push(field);
+    }
+
+    pub fn extend<I>(&mut self, fields: I)
+    where
+        I: IntoIterator<Item = Field>,
+    {
+        self.fields.extend(fields);
+    }
+
     pub fn to_map(&self) -> std::collections::BTreeMap<String, Option<String>> {
         self.fields
             .iter()
@@ -1102,6 +1113,23 @@ mod tests {
         assert_eq!(record.remove_key("level"), 2);
         assert_eq!(record.remove_key("missing"), 0);
         assert_eq!(record, Record::new(vec![Field::pair("msg", "hello")]));
+    }
+
+    #[test]
+    fn record_push_and_extend_append_new_fields() {
+        let mut record = Record::default();
+
+        record.push(Field::flag("debug"));
+        record.extend(vec![Field::pair("level", "info"), Field::pair("msg", "hi")]);
+
+        assert_eq!(
+            record,
+            Record::new(vec![
+                Field::flag("debug"),
+                Field::pair("level", "info"),
+                Field::pair("msg", "hi"),
+            ])
+        );
     }
 
     #[test]

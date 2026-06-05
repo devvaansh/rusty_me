@@ -914,6 +914,16 @@ mod tests {
     }
 
     #[test]
+    fn field_builders_toggle_value_state() {
+        let flag = Field::flag("debug");
+        let promoted = flag.clone().with_value("on");
+        assert_eq!(promoted, Field::pair("debug", "on"));
+
+        let demoted = promoted.without_value();
+        assert_eq!(demoted, Field::flag("debug"));
+    }
+
+    #[test]
     fn parse_strict_accepts_valid_input() {
         let fields = parse_strict("debug level=info msg=\"hello world\"").unwrap();
 

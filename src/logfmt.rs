@@ -54,6 +54,16 @@ impl Field {
         }
     }
 
+    pub fn with_value(mut self, value: impl Into<String>) -> Self {
+        self.value = Some(value.into());
+        self
+    }
+
+    pub fn without_value(mut self) -> Self {
+        self.value = None;
+        self
+    }
+
     pub fn is_flag(&self) -> bool {
         self.value.is_none()
     }

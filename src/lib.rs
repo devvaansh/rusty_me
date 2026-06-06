@@ -1,4 +1,24 @@
 //! Parser playground prepared for fuzzing experiments.
+//!
+//! `rusty_me` implements a small, deliberately hand-rolled `logfmt` parser so
+//! we can grow parsing rules alongside fuzzing coverage. The crate exposes
+//! three complementary APIs:
+//!
+//! - a tuple-oriented [`parse`] helper for the loosest possible interpretation,
+//! - structured [`Field`] / [`Record`] / [`Document`] types with `find`,
+//!   iteration, and mutation helpers, and
+//! - strict variants such as [`parse_strict`] that surface [`ParseError`]s at
+//!   byte positions for fuzzing regressions.
+//!
+//! ```
+//! use rusty_me::{Field, parse_record_strict};
+//!
+//! let record = parse_record_strict("debug level=info msg=\"hello world\"").unwrap();
+//! assert_eq!(record.len(), 3);
+//! assert_eq!(record.get_first_value("level"), Some("info"));
+//! assert!(record.contains_flag("debug"));
+//! # let _ = Field::flag("debug");
+//! ```
 
 pub mod logfmt;
 

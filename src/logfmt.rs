@@ -734,6 +734,41 @@ pub fn normalize_document_strict(input: &str) -> Result<String, LineParseError> 
     parse_document_strict(input).map(|document| document.encode())
 }
 
+/// Escapes a value string using logfmt quoting rules and returns the encoded form.
+///
+/// Values that already survive unquoted are returned unchanged; values with
+/// whitespace, quotes, or control characters get wrapped in double quotes.
+#[must_use]
+pub fn escape_value(value: &str) -> String {
+    let mut out = String::new();
+    push_encoded_value(&mut out, value);
+    out
+}
+
+/// Reverses [`escape_value`] by consuming a possibly-quoted logfmt value.
+///
+/// Unquoted values are returned as-is. Quoted values have their surrounding
+/// quotes removed and their escape sequences interpreted. Unterminated quotes
+/// surface as [`ParseErrorKind::UnterminatedQuote`].
+pub fn unescape_value(input: &str) -> Result<String, ParseError> {
+    if !input.starts_with('"') {
+        return Ok(input.to_string());
+    }
+
+    let mut cursor = input.char_indices().peekable();
+    let (quote_position, _) = cursor.next().expect("leading quote consumed");
+    let value = read_quoted_value_strict(&mut cursor, quote_position)?;
+
+    if cursor.next().is_some() {
+        return Err(ParseError {
+            position: quote_position,
+            kind: ParseErrorKind::UnexpectedQuote,
+        });
+    }
+
+    Ok(value)
+}
+
 fn fields_to_map<I>(fields: I) -> std::collections::BTreeMap<String, Option<String>>
 where
     I: IntoIterator<Item = Field>,
@@ -796,10 +831,11 @@ fn value_needs_quotes(value: &str) -> bool {
 mod tests {
     use super::{
         Document, Field, LineParseError, ParseError, ParseErrorKind, Record, Token, encode_fields,
-        encode_lines, encode_map, normalize, normalize_document, normalize_document_strict,
-        normalize_lines, normalize_lines_strict, normalize_strict, parse, parse_document,
-        parse_document_strict, parse_fields, parse_lines, parse_lines_strict, parse_record,
-        parse_record_strict, parse_strict, parse_to_map, parse_to_map_strict, tokenize,
+        encode_lines, encode_map, escape_value, normalize, normalize_document,
+        normalize_document_strict, normalize_lines, normalize_lines_strict, normalize_strict,
+        parse, parse_document, parse_document_strict, parse_fields, parse_lines,
+        parse_lines_strict, parse_record, parse_record_strict, parse_strict, parse_to_map,
+        parse_to_map_strict, tokenize, unescape_value,
     };
 
     #[test]
@@ -921,6 +957,48 @@ mod tests {
 
         let demoted = promoted.without_value();
         assert_eq!(demoted, Field::flag("debug"));
+    }
+
+    #[test]
+    fn escape_value_quotes_special_characters_and_leaves_plain_text_untouched() {
+        assert_eq!(escape_value("info"), "info");
+        assert_eq!(escape_value(""), "\"\"");
+        assert_eq!(escape_value("hello world"), "\"hello world\"");
+        assert_eq!(escape_value("say \"hi\""), "\"say \\\"hi\\\"\"");
+        assert_eq!(escape_value("a\tb"), "\"a\\tb\"");
+    }
+
+    #[test]
+    fn unescape_value_roundtrips_escape_value() {
+        for raw in ["info", "", "hello world", "say \"hi\"", "line 1\nline 2"] {
+            assert_eq!(unescape_value(&escape_value(raw)).unwrap(), raw);
+        }
+    }
+
+    #[test]
+    fn unescape_value_rejects_trailing_bytes_after_quoted_value() {
+        let error = unescape_value("\"quoted\"extra").unwrap_err();
+
+        assert_eq!(
+            error,
+            ParseError {
+                position: 0,
+                kind: ParseErrorKind::UnexpectedQuote,
+            }
+        );
+    }
+
+    #[test]
+    fn unescape_value_flags_unterminated_quotes() {
+        let error = unescape_value("\"broken").unwrap_err();
+
+        assert_eq!(
+            error,
+            ParseError {
+                position: 0,
+                kind: ParseErrorKind::UnterminatedQuote,
+            }
+        );
     }
 
     #[test]

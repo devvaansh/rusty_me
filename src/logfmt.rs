@@ -195,6 +195,21 @@ impl Document {
         self.records.iter()
     }
 
+    pub fn find_first(&self, key: &str) -> Option<&Field> {
+        self.records.iter().find_map(|record| record.find(key))
+    }
+
+    pub fn find_last(&self, key: &str) -> Option<&Field> {
+        self.records
+            .iter()
+            .rev()
+            .find_map(|record| record.find_last(key))
+    }
+
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.records.iter().any(|record| record.find(key).is_some())
+    }
+
     #[must_use]
     pub fn encode(&self) -> String {
         encode_lines(

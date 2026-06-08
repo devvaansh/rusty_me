@@ -1286,6 +1286,25 @@ mod tests {
     }
 
     #[test]
+    fn document_find_helpers_walk_across_records() {
+        let document = Document::new(vec![
+            Record::new(vec![Field::pair("level", "info")]),
+            Record::new(vec![Field::pair("level", "warn"), Field::flag("debug")]),
+        ]);
+
+        assert_eq!(
+            document.find_first("level"),
+            Some(&Field::pair("level", "info"))
+        );
+        assert_eq!(
+            document.find_last("level"),
+            Some(&Field::pair("level", "warn"))
+        );
+        assert!(document.contains_key("debug"));
+        assert!(!document.contains_key("missing"));
+    }
+
+    #[test]
     fn record_encode_roundtrips_through_strict_parser() {
         let record = Record::new(vec![
             Field::flag("debug"),

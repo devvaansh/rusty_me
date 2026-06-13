@@ -210,6 +210,30 @@ impl Document {
         self.records.iter().any(|record| record.find(key).is_some())
     }
 
+    pub fn push(&mut self, record: Record) {
+        self.records.push(record);
+    }
+
+    pub fn extend<I>(&mut self, records: I)
+    where
+        I: IntoIterator<Item = Record>,
+    {
+        self.records.extend(records);
+    }
+
+    pub fn retain<F>(&mut self, predicate: F)
+    where
+        F: FnMut(&Record) -> bool,
+    {
+        self.records.retain(predicate);
+    }
+
+    pub fn drop_empty_records(&mut self) -> usize {
+        let before = self.records.len();
+        self.records.retain(|record| !record.is_empty());
+        before - self.records.len()
+    }
+
     #[must_use]
     pub fn encode(&self) -> String {
         encode_lines(

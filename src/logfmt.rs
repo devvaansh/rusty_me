@@ -1329,6 +1329,25 @@ mod tests {
     }
 
     #[test]
+    fn document_mutation_helpers_grow_shrink_and_filter() {
+        let mut document = Document::default();
+
+        document.push(Record::new(vec![Field::pair("level", "info")]));
+        document.extend(vec![
+            Record::default(),
+            Record::new(vec![Field::flag("debug")]),
+        ]);
+
+        assert_eq!(document.len(), 3);
+        assert_eq!(document.drop_empty_records(), 1);
+        assert_eq!(document.len(), 2);
+
+        document.retain(|record| record.contains_flag("debug"));
+        assert_eq!(document.len(), 1);
+        assert!(document.iter().next().unwrap().contains_flag("debug"));
+    }
+
+    #[test]
     fn record_encode_roundtrips_through_strict_parser() {
         let record = Record::new(vec![
             Field::flag("debug"),

@@ -101,6 +101,22 @@ impl Record {
         self.fields.iter()
     }
 
+    pub fn iter_pairs(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.fields.iter().filter_map(|field| {
+            field
+                .value
+                .as_deref()
+                .map(|value| (field.key.as_str(), value))
+        })
+    }
+
+    pub fn iter_flags(&self) -> impl Iterator<Item = &str> {
+        self.fields
+            .iter()
+            .filter(|field| field.is_flag())
+            .map(|field| field.key.as_str())
+    }
+
     pub fn find(&self, key: &str) -> Option<&Field> {
         self.fields.iter().find(|field| field.key == key)
     }
@@ -1218,6 +1234,22 @@ mod tests {
         assert_eq!(record.values_for("level"), vec!["info", "warn"]);
         assert_eq!(record.values_for("msg"), vec!["hello"]);
         assert!(record.values_for("missing").is_empty());
+    }
+
+    #[test]
+    fn record_iter_pairs_and_iter_flags_split_by_shape() {
+        let record = Record::new(vec![
+            Field::flag("debug"),
+            Field::pair("level", "info"),
+            Field::flag("trace"),
+            Field::pair("msg", "hello"),
+        ]);
+
+        let pairs: Vec<(&str, &str)> = record.iter_pairs().collect();
+        assert_eq!(pairs, vec![("level", "info"), ("msg", "hello")]);
+
+        let flags: Vec<&str> = record.iter_flags().collect();
+        assert_eq!(flags, vec!["debug", "trace"]);
     }
 
     #[test]

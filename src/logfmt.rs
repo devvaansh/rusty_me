@@ -906,9 +906,9 @@ mod tests {
         Document, Field, LineParseError, ParseError, ParseErrorKind, Record, Token, encode_fields,
         encode_lines, encode_map, escape_value, normalize, normalize_document,
         normalize_document_strict, normalize_lines, normalize_lines_strict, normalize_strict,
-        parse, parse_document, parse_document_strict, parse_fields, parse_lines,
-        parse_lines_strict, parse_record, parse_record_strict, parse_strict, parse_to_map,
-        parse_to_map_strict, tokenize, unescape_value,
+        parse, parse_document, parse_document_strict, parse_fields, parse_flags, parse_lines,
+        parse_lines_strict, parse_pairs, parse_record, parse_record_strict, parse_strict,
+        parse_to_map, parse_to_map_strict, tokenize, unescape_value,
     };
 
     #[test]
@@ -1133,6 +1133,26 @@ mod tests {
 
         assert_eq!(fields.get("debug"), Some(&None));
         assert_eq!(fields.get("level"), Some(&Some("warn".into())));
+    }
+
+    #[test]
+    fn parse_pairs_returns_only_key_value_pairs() {
+        let pairs = parse_pairs("debug level=info msg=\"hello world\" trace");
+
+        assert_eq!(
+            pairs,
+            vec![
+                ("level".to_string(), "info".to_string()),
+                ("msg".to_string(), "hello world".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_flags_returns_only_bare_flags_in_order() {
+        let flags = parse_flags("debug level=info trace msg=hi verbose");
+
+        assert_eq!(flags, vec!["debug", "trace", "verbose"]);
     }
 
     #[test]

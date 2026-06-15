@@ -696,6 +696,24 @@ pub fn parse_to_map(input: &str) -> std::collections::BTreeMap<String, Option<St
     fields_to_map(parse_fields(input))
 }
 
+/// Extracts only the key/value pairs from a logfmt input, discarding bare flags.
+#[must_use]
+pub fn parse_pairs(input: &str) -> Vec<(String, String)> {
+    parse_fields(input)
+        .into_iter()
+        .filter_map(|field| field.value.map(|value| (field.key, value)))
+        .collect()
+}
+
+/// Extracts only the bare flags from a logfmt input, discarding key/value pairs.
+#[must_use]
+pub fn parse_flags(input: &str) -> Vec<String> {
+    parse_fields(input)
+        .into_iter()
+        .filter(|field| field.is_flag())
+        .map(|field| field.key)
+        .collect()
+}
 /// Parses a logfmt input string into a last-write-wins map and surfaces malformed input.
 pub fn parse_to_map_strict(
     input: &str,

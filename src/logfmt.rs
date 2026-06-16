@@ -274,6 +274,25 @@ impl From<Record> for Vec<Field> {
     }
 }
 
+impl<K, V> From<(K, V)> for Field
+where
+    K: Into<String>,
+    V: Into<String>,
+{
+    fn from((key, value): (K, V)) -> Self {
+        Field::pair(key, value)
+    }
+}
+
+impl<K> From<(K,)> for Field
+where
+    K: Into<String>,
+{
+    fn from((key,): (K,)) -> Self {
+        Field::flag(key)
+    }
+}
+
 impl<'a> IntoIterator for &'a Record {
     type Item = &'a Field;
     type IntoIter = std::slice::Iter<'a, Field>;
@@ -1030,6 +1049,15 @@ mod tests {
 
         let demoted = promoted.without_value();
         assert_eq!(demoted, Field::flag("debug"));
+    }
+
+    #[test]
+    fn field_from_tuples_produces_pairs_and_flags() {
+        let pair: Field = ("level", "info").into();
+        assert_eq!(pair, Field::pair("level", "info"));
+
+        let flag: Field = ("debug",).into();
+        assert_eq!(flag, Field::flag("debug"));
     }
 
     #[test]

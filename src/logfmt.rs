@@ -1089,6 +1089,19 @@ mod tests {
     }
 
     #[test]
+    fn record_and_document_collect_from_iterators() {
+        let record: Record = vec![Field::flag("debug"), Field::pair("level", "info")]
+            .into_iter()
+            .collect();
+        assert_eq!(record.len(), 2);
+        assert!(record.contains_flag("debug"));
+
+        let document: Document = vec![record.clone(), Record::default()].into_iter().collect();
+        assert_eq!(document.len(), 2);
+        assert_eq!(document.iter().next(), Some(&record));
+    }
+
+    #[test]
     fn escape_value_quotes_special_characters_and_leaves_plain_text_untouched() {
         assert_eq!(escape_value("info"), "info");
         assert_eq!(escape_value(""), "\"\"");

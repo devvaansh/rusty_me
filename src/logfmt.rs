@@ -311,6 +311,34 @@ impl IntoIterator for Record {
     }
 }
 
+impl FromIterator<Field> for Record {
+    fn from_iter<I: IntoIterator<Item = Field>>(iter: I) -> Self {
+        Record {
+            fields: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl Extend<Field> for Record {
+    fn extend<I: IntoIterator<Item = Field>>(&mut self, iter: I) {
+        self.fields.extend(iter);
+    }
+}
+
+impl FromIterator<Record> for Document {
+    fn from_iter<I: IntoIterator<Item = Record>>(iter: I) -> Self {
+        Document {
+            records: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl Extend<Record> for Document {
+    fn extend<I: IntoIterator<Item = Record>>(&mut self, iter: I) {
+        self.records.extend(iter);
+    }
+}
+
 impl From<Vec<Record>> for Document {
     fn from(records: Vec<Record>) -> Self {
         Self::new(records)

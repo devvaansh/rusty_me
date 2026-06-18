@@ -387,6 +387,24 @@ impl std::fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {}
 
+impl std::fmt::Display for Field {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.encode())
+    }
+}
+
+impl std::fmt::Display for Record {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.encode())
+    }
+}
+
+impl std::fmt::Display for Document {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.encode())
+    }
+}
+
 impl std::fmt::Display for LineParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "line {}: {}", self.line, self.error)
@@ -1096,9 +1114,26 @@ mod tests {
         assert_eq!(record.len(), 2);
         assert!(record.contains_flag("debug"));
 
-        let document: Document = vec![record.clone(), Record::default()].into_iter().collect();
+        let document: Document = vec![record.clone(), Record::default()]
+            .into_iter()
+            .collect();
         assert_eq!(document.len(), 2);
         assert_eq!(document.iter().next(), Some(&record));
+    }
+
+    #[test]
+    fn display_impls_match_encode_output() {
+        let field = Field::pair("msg", "hello world");
+        assert_eq!(format!("{field}"), field.encode());
+
+        let record = Record::new(vec![Field::flag("debug"), Field::pair("level", "info")]);
+        assert_eq!(format!("{record}"), record.encode());
+
+        let document = Document::new(vec![
+            record.clone(),
+            Record::new(vec![Field::pair("msg", "hi")]),
+        ]);
+        assert_eq!(format!("{document}"), document.encode());
     }
 
     #[test]

@@ -405,6 +405,22 @@ impl std::fmt::Display for Document {
     }
 }
 
+impl std::str::FromStr for Record {
+    type Err = ParseError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        parse_record_strict(input)
+    }
+}
+
+impl std::str::FromStr for Document {
+    type Err = LineParseError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        parse_document_strict(input)
+    }
+}
+
 impl std::fmt::Display for LineParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "line {}: {}", self.line, self.error)

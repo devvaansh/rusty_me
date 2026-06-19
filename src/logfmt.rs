@@ -1153,6 +1153,23 @@ mod tests {
     }
 
     #[test]
+    fn from_str_roundtrips_display_output() {
+        use std::str::FromStr;
+
+        let record = Record::new(vec![Field::flag("debug"), Field::pair("msg", "hi world")]);
+        assert_eq!(Record::from_str(&record.to_string()).unwrap(), record);
+
+        let document = Document::new(vec![
+            record.clone(),
+            Record::new(vec![Field::pair("level", "info")]),
+        ]);
+        assert_eq!(Document::from_str(&document.to_string()).unwrap(), document);
+
+        assert!(Record::from_str("=broken").is_err());
+        assert!(Document::from_str("level=info\n=broken").is_err());
+    }
+
+    #[test]
     fn escape_value_quotes_special_characters_and_leaves_plain_text_untouched() {
         assert_eq!(escape_value("info"), "info");
         assert_eq!(escape_value(""), "\"\"");

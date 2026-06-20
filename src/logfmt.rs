@@ -766,6 +766,32 @@ pub fn parse_lines_strict(input: &str) -> Result<Vec<Vec<Field>>, LineParseError
         .collect()
 }
 
+/// Parses newline-delimited logfmt records and separates well-formed lines from errors.
+///
+/// Unlike [`parse_lines_strict`], this variant continues past malformed lines and
+/// returns any errors alongside successfully parsed records so callers can decide
+/// how to react.
+pub fn parse_lines_lossy(input: &str) -> (Vec<Vec<Field>>, Vec<LineParseError>) {
+    let mut records = Vec::new();
+    let mut errors = Vec::new();
+
+    for (index, line) in input.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        match parse_strict(line) {
+            Ok(fields) => records.push(fields),
+            Err(error) => errors.push(LineParseError {
+                line: index + 1,
+                error,
+            }),
+        }
+    }
+
+    (records, errors)
+}
+
 /// Parses newline-delimited logfmt records into a typed document and reports the failing line on malformed input.
 pub fn parse_document_strict(input: &str) -> Result<Document, LineParseError> {
     parse_lines_strict(input)
@@ -988,8 +1014,8 @@ mod tests {
         encode_lines, encode_map, escape_value, normalize, normalize_document,
         normalize_document_strict, normalize_lines, normalize_lines_strict, normalize_strict,
         parse, parse_document, parse_document_strict, parse_fields, parse_flags, parse_lines,
-        parse_lines_strict, parse_pairs, parse_record, parse_record_strict, parse_strict,
-        parse_to_map, parse_to_map_strict, tokenize, unescape_value,
+        parse_lines_lossy, parse_lines_strict, parse_pairs, parse_record, parse_record_strict,
+        parse_strict, parse_to_map, parse_to_map_strict, tokenize, unescape_value,
     };
 
     #[test]
@@ -1341,6 +1367,21 @@ mod tests {
                 },
             }
         );
+    }
+
+    #[test]
+    fn parse_lines_lossy_keeps_good_records_and_lists_errors() {
+        let (records, errors) = parse_lines_lossy("level=info\n=broken\nmsg=hello\n\"orphan\"");
+
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0], vec![Field::pair("level", "info")]);
+        assert_eq!(records[1], vec![Field::pair("msg", "hello")]);
+
+        assert_eq!(errors.len(), 2);
+        assert_eq!(errors[0].line, 2);
+        assert_eq!(errors[0].error.kind, ParseErrorKind::MissingKey);
+        assert_eq!(errors[1].line, 4);
+        assert_eq!(errors[1].error.kind, ParseErrorKind::UnexpectedQuote);
     }
 
     #[test]

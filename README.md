@@ -44,17 +44,22 @@ The crate root now re-exports the most useful parsing helpers:
 - `tokenize` for low-level token streams
 - `parse` for a tuple-oriented compatibility API
 - `parse_fields` for structured fields with flag awareness
+- `parse_pairs` and `parse_flags` when only one shape is needed
 - `parse_record` and `parse_record_strict` for typed single-record APIs
 - `parse_strict` when malformed input should return a typed error
 - `parse_document` and `parse_document_strict` for typed multi-record APIs
 - `parse_lines` and `parse_lines_strict` for newline-delimited records
+- `parse_lines_lossy` and `parse_document_lossy` for partial recovery with per-line errors
 - `parse_to_map` and `parse_to_map_strict` for last-write-wins map output
+- `escape_value` / `unescape_value` for single-value encoding
 - `encode_fields`, `encode_lines`, `encode_map`, `normalize`, `normalize_lines`, and strict variants for serialization
 
 Typed wrappers are also available:
 
-- `Record` offers key lookup helpers like `find`, `get_first_value`, and `to_map`
-- `Document` groups newline-delimited `Record` values and can encode back to text
+- `Field` supports builder-style `with_value` / `without_value`, tuple `From` conversions, and `Display`
+- `Record` offers key lookup helpers like `find`, `values_for`, `get_first_value`, and `to_map`; iteration via `iter`, `iter_pairs`, and `iter_flags`; and mutation via `push`, `extend`, `retain`, and `remove_key`
+- `Document` groups newline-delimited `Record` values, supports iteration and mutation, and can encode back to text
+- `Record` and `Document` implement `Display`, `FromStr`, `FromIterator`, and `Extend`
 
 Example:
 

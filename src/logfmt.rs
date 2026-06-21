@@ -798,6 +798,13 @@ pub fn parse_document_strict(input: &str) -> Result<Document, LineParseError> {
         .map(|records| Document::from(records.into_iter().map(Record::from).collect::<Vec<_>>()))
 }
 
+/// Parses newline-delimited logfmt records into a typed document while surfacing any per-line errors.
+pub fn parse_document_lossy(input: &str) -> (Document, Vec<LineParseError>) {
+    let (records, errors) = parse_lines_lossy(input);
+    let document = Document::from(records.into_iter().map(Record::from).collect::<Vec<_>>());
+    (document, errors)
+}
+
 /// Parses a logfmt input string into a last-write-wins map.
 pub fn parse_to_map(input: &str) -> std::collections::BTreeMap<String, Option<String>> {
     fields_to_map(parse_fields(input))
@@ -1013,9 +1020,10 @@ mod tests {
         Document, Field, LineParseError, ParseError, ParseErrorKind, Record, Token, encode_fields,
         encode_lines, encode_map, escape_value, normalize, normalize_document,
         normalize_document_strict, normalize_lines, normalize_lines_strict, normalize_strict,
-        parse, parse_document, parse_document_strict, parse_fields, parse_flags, parse_lines,
-        parse_lines_lossy, parse_lines_strict, parse_pairs, parse_record, parse_record_strict,
-        parse_strict, parse_to_map, parse_to_map_strict, tokenize, unescape_value,
+        parse, parse_document, parse_document_lossy, parse_document_strict, parse_fields,
+        parse_flags, parse_lines, parse_lines_lossy, parse_lines_strict, parse_pairs, parse_record,
+        parse_record_strict, parse_strict, parse_to_map, parse_to_map_strict, tokenize,
+        unescape_value,
     };
 
     #[test]
@@ -1382,6 +1390,20 @@ mod tests {
         assert_eq!(errors[0].error.kind, ParseErrorKind::MissingKey);
         assert_eq!(errors[1].line, 4);
         assert_eq!(errors[1].error.kind, ParseErrorKind::UnexpectedQuote);
+    }
+
+    #[test]
+    fn parse_document_lossy_wraps_lossy_records_as_a_document() {
+        let (document, errors) = parse_document_lossy("level=info\n=broken\nmsg=hello\n\"orphan\"");
+
+        assert_eq!(document.len(), 2);
+        assert_eq!(
+            document.find_first("level"),
+            Some(&Field::pair("level", "info"))
+        );
+        assert_eq!(errors.len(), 2);
+        assert_eq!(errors[0].line, 2);
+        assert_eq!(errors[1].line, 4);
     }
 
     #[test]

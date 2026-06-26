@@ -1,0 +1,7 @@
+level=info
+=broken
+msg="hello world"
+"orphan"
+trace=true
+msg="unterminated
+debug empty=

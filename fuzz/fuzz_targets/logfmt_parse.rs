@@ -7,10 +7,14 @@ fuzz_target!(|data: &[u8]| {
         let tokens = rusty_me::tokenize(input);
         let tuples = rusty_me::parse(input);
         let fields = rusty_me::parse_fields(input);
+        let pairs = rusty_me::parse_pairs(input);
+        let flags = rusty_me::parse_flags(input);
         let record = rusty_me::parse_record(input);
         let records = rusty_me::parse_lines(input);
         let document = rusty_me::parse_document(input);
         let map = rusty_me::parse_to_map(input);
+        let (lossy_records, lossy_errors) = rusty_me::parse_lines_lossy(input);
+        let (lossy_document, lossy_doc_errors) = rusty_me::parse_document_lossy(input);
         let encoded_fields = rusty_me::encode_fields(&fields);
         let encoded_lines = rusty_me::encode_lines(&records);
         let encoded_map = rusty_me::encode_map(&map);
@@ -24,6 +28,26 @@ fuzz_target!(|data: &[u8]| {
         assert_eq!(tuples.len(), fields.len());
         assert_eq!(record.fields(), fields.as_slice());
         assert_eq!(document.records().len(), records.len());
+        assert_eq!(lossy_document.len(), lossy_records.len());
+        assert_eq!(lossy_errors, lossy_doc_errors);
+
+        let expected_pairs: Vec<(String, String)> = fields
+            .iter()
+            .filter_map(|field| {
+                field
+                    .value
+                    .as_ref()
+                    .map(|value| (field.key.clone(), value.clone()))
+            })
+            .collect();
+        assert_eq!(pairs, expected_pairs);
+
+        let expected_flags: Vec<String> = fields
+            .iter()
+            .filter(|field| field.is_flag())
+            .map(|field| field.key.clone())
+            .collect();
+        assert_eq!(flags, expected_flags);
 
         let tuples_from_fields: Vec<_> = fields
             .iter()
@@ -61,6 +85,8 @@ fuzz_target!(|data: &[u8]| {
             assert_eq!(rusty_me::parse_document_strict(input).unwrap(), document);
             assert_eq!(rusty_me::normalize_document_strict(input).unwrap(), encoded_document);
             assert_eq!(rusty_me::normalize_lines_strict(input).unwrap(), encoded_lines);
+            assert!(lossy_errors.is_empty());
+            assert_eq!(lossy_records, strict_records);
         }
     }
 });

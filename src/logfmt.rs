@@ -1635,6 +1635,25 @@ mod tests {
     }
 
     #[test]
+    fn document_merge_collapses_records_with_last_value_wins() {
+        let document = Document::new(vec![
+            Record::new(vec![Field::pair("level", "info"), Field::flag("debug")]),
+            Record::new(vec![Field::pair("level", "warn"), Field::pair("msg", "hi")]),
+        ]);
+
+        let merged = document.merge();
+
+        assert_eq!(
+            merged,
+            Record::new(vec![
+                Field::pair("level", "warn"),
+                Field::flag("debug"),
+                Field::pair("msg", "hi"),
+            ])
+        );
+    }
+
+    #[test]
     fn record_encode_roundtrips_through_strict_parser() {
         let record = Record::new(vec![
             Field::flag("debug"),

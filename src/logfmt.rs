@@ -250,6 +250,23 @@ impl Document {
         before - self.records.len()
     }
 
+    /// Collapses all records into a single record where later keys overwrite earlier values.
+    pub fn merge(&self) -> Record {
+        let mut merged: Vec<Field> = Vec::new();
+
+        for record in &self.records {
+            for field in &record.fields {
+                if let Some(existing) = merged.iter_mut().find(|item| item.key == field.key) {
+                    existing.value = field.value.clone();
+                } else {
+                    merged.push(field.clone());
+                }
+            }
+        }
+
+        Record::new(merged)
+    }
+
     #[must_use]
     pub fn encode(&self) -> String {
         encode_lines(

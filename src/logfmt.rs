@@ -171,6 +171,14 @@ impl Record {
         self.fields.extend(fields);
     }
 
+    /// Returns a copy of the record with fields sorted by key while preserving
+    /// the relative order of duplicate keys.
+    pub fn sorted(&self) -> Record {
+        let mut fields = self.fields.clone();
+        fields.sort_by(|a, b| a.key.cmp(&b.key));
+        Record { fields }
+    }
+
     pub fn to_map(&self) -> std::collections::BTreeMap<String, Option<String>> {
         self.fields
             .iter()
@@ -1651,6 +1659,25 @@ mod tests {
                 Field::pair("msg", "hi"),
             ])
         );
+    }
+
+    #[test]
+    fn record_sorted_orders_fields_by_key_stably() {
+        let record = Record::new(vec![
+            Field::pair("msg", "hello"),
+            Field::flag("debug"),
+            Field::pair("level", "info"),
+            Field::pair("level", "warn"),
+        ]);
+
+        let sorted = record.sorted();
+
+        assert_eq!(sorted.fields()[0].key, "debug");
+        assert_eq!(sorted.fields()[1].key, "level");
+        assert_eq!(sorted.fields()[2].key, "level");
+        assert_eq!(sorted.fields()[3].key, "msg");
+        // original must not be modified
+        assert_eq!(record.fields()[0].key, "msg");
     }
 
     #[test]

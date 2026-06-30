@@ -835,6 +835,14 @@ pub fn parse_document_lossy(input: &str) -> (Document, Vec<LineParseError>) {
     (document, errors)
 }
 
+/// Encodes a sequence of structured fields into normalized logfmt text with keys in sorted order.
+#[must_use]
+pub fn encode_sorted(fields: &[Field]) -> String {
+    let mut sorted = fields.to_vec();
+    sorted.sort_by(|a, b| a.key.cmp(&b.key));
+    encode_fields(&sorted)
+}
+
 /// Parses a logfmt input string into a last-write-wins map.
 pub fn parse_to_map(input: &str) -> std::collections::BTreeMap<String, Option<String>> {
     fields_to_map(parse_fields(input))
@@ -1048,7 +1056,7 @@ fn value_needs_quotes(value: &str) -> bool {
 mod tests {
     use super::{
         Document, Field, LineParseError, ParseError, ParseErrorKind, Record, Token, encode_fields,
-        encode_lines, encode_map, escape_value, normalize, normalize_document,
+        encode_lines, encode_map, encode_sorted, escape_value, normalize, normalize_document,
         normalize_document_strict, normalize_lines, normalize_lines_strict, normalize_strict,
         parse, parse_document, parse_document_lossy, parse_document_strict, parse_fields,
         parse_flags, parse_lines, parse_lines_lossy, parse_lines_strict, parse_pairs, parse_record,
@@ -1664,6 +1672,30 @@ mod tests {
                 Field::pair("msg", "hi"),
             ])
         );
+    }
+
+    #[test]
+    fn document_flatten_yields_all_fields_in_order() {
+        let document = Document::new(vec![
+            Record::new(vec![Field::flag("debug"), Field::pair("level", "info")]),
+            Record::new(vec![Field::pair("msg", "hello")]),
+        ]);
+
+        let all: Vec<&Field> = document.flatten().collect();
+        assert_eq!(all.len(), 3);
+        assert_eq!(all[0], &Field::flag("debug"));
+        assert_eq!(all[2], &Field::pair("msg", "hello"));
+    }
+
+    #[test]
+    fn encode_sorted_outputs_fields_in_alphabetical_key_order() {
+        let fields = vec![
+            Field::pair("msg", "hello"),
+            Field::flag("debug"),
+            Field::pair("level", "info"),
+        ];
+        let encoded = encode_sorted(&fields);
+        assert_eq!(encoded, "debug level=info msg=hello");
     }
 
     #[test]

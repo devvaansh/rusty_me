@@ -275,6 +275,11 @@ impl Document {
         Record::new(merged)
     }
 
+    /// Returns an iterator over every `Field` across all records in document order.
+    pub fn flatten(&self) -> impl Iterator<Item = &Field> {
+        self.records.iter().flat_map(|record| record.fields.iter())
+    }
+
     #[must_use]
     pub fn encode(&self) -> String {
         encode_lines(

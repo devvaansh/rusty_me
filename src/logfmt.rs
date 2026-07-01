@@ -68,6 +68,11 @@ impl Field {
         self.value.is_none()
     }
 
+    /// Returns `true` when the key satisfies `key_is_valid`.
+    pub fn is_well_formed(&self) -> bool {
+        key_is_valid(&self.key)
+    }
+
     #[must_use]
     pub fn encode(&self) -> String {
         let mut out = String::new();
@@ -1715,6 +1720,14 @@ mod tests {
         assert!(!key_is_valid("ke y"));
         assert!(!key_is_valid("ke=y"));
         assert!(!key_is_valid("\"key\""));
+    }
+
+    #[test]
+    fn field_is_well_formed_delegates_to_key_is_valid() {
+        assert!(Field::pair("level", "info").is_well_formed());
+        assert!(Field::flag("debug").is_well_formed());
+        assert!(!Field::pair("ke y", "bad").is_well_formed());
+        assert!(!Field::flag("").is_well_formed());
     }
 
     #[test]

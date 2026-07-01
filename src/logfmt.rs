@@ -1052,16 +1052,24 @@ fn value_needs_quotes(value: &str) -> bool {
         .any(|ch| ch.is_ascii_whitespace() || matches!(ch, '"' | '\\' | '\n' | '\r' | '\t'))
 }
 
+/// Returns `true` if `key` is a well-formed logfmt key: non-empty, no whitespace, no `=` or `"`.
+pub fn key_is_valid(key: &str) -> bool {
+    !key.is_empty()
+        && key
+            .chars()
+            .all(|ch| !ch.is_ascii_whitespace() && ch != '=' && ch != '"')
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         Document, Field, LineParseError, ParseError, ParseErrorKind, Record, Token, encode_fields,
-        encode_lines, encode_map, encode_sorted, escape_value, normalize, normalize_document,
-        normalize_document_strict, normalize_lines, normalize_lines_strict, normalize_strict,
-        parse, parse_document, parse_document_lossy, parse_document_strict, parse_fields,
-        parse_flags, parse_lines, parse_lines_lossy, parse_lines_strict, parse_pairs, parse_record,
-        parse_record_strict, parse_strict, parse_to_map, parse_to_map_strict, tokenize,
-        unescape_value,
+        encode_lines, encode_map, encode_sorted, escape_value, key_is_valid, normalize,
+        normalize_document, normalize_document_strict, normalize_lines, normalize_lines_strict,
+        normalize_strict, parse, parse_document, parse_document_lossy, parse_document_strict,
+        parse_fields, parse_flags, parse_lines, parse_lines_lossy, parse_lines_strict, parse_pairs,
+        parse_record, parse_record_strict, parse_strict, parse_to_map, parse_to_map_strict,
+        tokenize, unescape_value,
     };
 
     #[test]
@@ -1696,6 +1704,17 @@ mod tests {
         ];
         let encoded = encode_sorted(&fields);
         assert_eq!(encoded, "debug level=info msg=hello");
+    }
+
+    #[test]
+    fn key_is_valid_accepts_printable_keys_and_rejects_special_chars() {
+        assert!(key_is_valid("level"));
+        assert!(key_is_valid("request_id"));
+        assert!(key_is_valid("x"));
+        assert!(!key_is_valid(""));
+        assert!(!key_is_valid("ke y"));
+        assert!(!key_is_valid("ke=y"));
+        assert!(!key_is_valid("\"key\""));
     }
 
     #[test]

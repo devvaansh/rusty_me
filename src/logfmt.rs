@@ -122,6 +122,14 @@ impl Record {
             .map(|field| field.key.as_str())
     }
 
+    /// Returns only the fields whose keys pass `key_is_valid`.
+    pub fn well_formed(&self) -> Vec<&Field> {
+        self.fields
+            .iter()
+            .filter(|field| field.is_well_formed())
+            .collect()
+    }
+
     pub fn find(&self, key: &str) -> Option<&Field> {
         self.fields.iter().find(|field| field.key == key)
     }
@@ -1728,6 +1736,21 @@ mod tests {
         assert!(Field::flag("debug").is_well_formed());
         assert!(!Field::pair("ke y", "bad").is_well_formed());
         assert!(!Field::flag("").is_well_formed());
+    }
+
+    #[test]
+    fn record_well_formed_filters_out_invalid_keys() {
+        let record = Record::new(vec![
+            Field::flag("debug"),
+            Field::pair("ke y", "bad"),
+            Field::pair("level", "info"),
+            Field::pair("", "empty key"),
+        ]);
+
+        let good: Vec<&Field> = record.well_formed();
+        assert_eq!(good.len(), 2);
+        assert_eq!(good[0], &Field::flag("debug"));
+        assert_eq!(good[1], &Field::pair("level", "info"));
     }
 
     #[test]

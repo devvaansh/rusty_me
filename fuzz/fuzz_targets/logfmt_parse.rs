@@ -16,6 +16,7 @@ fuzz_target!(|data: &[u8]| {
         let (lossy_records, lossy_errors) = rusty_me::parse_lines_lossy(input);
         let (lossy_document, lossy_doc_errors) = rusty_me::parse_document_lossy(input);
         let encoded_fields = rusty_me::encode_fields(&fields);
+        let encoded_sorted = rusty_me::encode_sorted(&fields);
         let encoded_lines = rusty_me::encode_lines(&records);
         let encoded_map = rusty_me::encode_map(&map);
         let encoded_record = record.encode();
@@ -30,6 +31,17 @@ fuzz_target!(|data: &[u8]| {
         assert_eq!(document.records().len(), records.len());
         assert_eq!(lossy_document.len(), lossy_records.len());
         assert_eq!(lossy_errors, lossy_doc_errors);
+
+        // encode_sorted must parse back to the same field set (different order)
+        let sorted_parsed = rusty_me::parse_fields(&encoded_sorted);
+        assert_eq!(sorted_parsed.len(), fields.len());
+
+        // flatten must yield all fields across all records
+        let flat_count: usize = document.flatten().count();
+        assert_eq!(
+            flat_count,
+            document.records().iter().map(|r| r.len()).sum::<usize>()
+        );
 
         let expected_pairs: Vec<(String, String)> = fields
             .iter()
@@ -83,8 +95,14 @@ fuzz_target!(|data: &[u8]| {
         if let Ok(strict_records) = rusty_me::parse_lines_strict(input) {
             assert_eq!(strict_records, records);
             assert_eq!(rusty_me::parse_document_strict(input).unwrap(), document);
-            assert_eq!(rusty_me::normalize_document_strict(input).unwrap(), encoded_document);
-            assert_eq!(rusty_me::normalize_lines_strict(input).unwrap(), encoded_lines);
+            assert_eq!(
+                rusty_me::normalize_document_strict(input).unwrap(),
+                encoded_document
+            );
+            assert_eq!(
+                rusty_me::normalize_lines_strict(input).unwrap(),
+                encoded_lines
+            );
             assert!(lossy_errors.is_empty());
             assert_eq!(lossy_records, strict_records);
         }

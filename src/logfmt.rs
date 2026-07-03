@@ -192,6 +192,27 @@ impl Record {
         Record { fields }
     }
 
+    /// Removes all but the first occurrence of each key, preserving original order.
+    pub fn dedup_first(&mut self) {
+        let mut seen = std::collections::HashSet::new();
+        self.fields.retain(|field| seen.insert(field.key.clone()));
+    }
+
+    /// Removes all but the last occurrence of each key, preserving original order.
+    pub fn dedup_last(&mut self) {
+        let mut seen = std::collections::HashSet::new();
+        self.fields = self
+            .fields
+            .iter()
+            .rev()
+            .filter(|field| seen.insert(field.key.clone()))
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+    }
+
     pub fn to_map(&self) -> std::collections::BTreeMap<String, Option<String>> {
         self.fields
             .iter()
@@ -1770,6 +1791,35 @@ mod tests {
         assert_eq!(sorted.fields()[3].key, "msg");
         // original must not be modified
         assert_eq!(record.fields()[0].key, "msg");
+    }
+
+    #[test]
+    fn record_dedup_keeps_first_or_last_occurrence_of_each_key() {
+        let base = Record::new(vec![
+            Field::pair("level", "info"),
+            Field::pair("level", "warn"),
+            Field::pair("msg", "hello"),
+        ]);
+
+        let mut first = base.clone();
+        first.dedup_first();
+        assert_eq!(
+            first,
+            Record::new(vec![
+                Field::pair("level", "info"),
+                Field::pair("msg", "hello"),
+            ])
+        );
+
+        let mut last = base;
+        last.dedup_last();
+        assert_eq!(
+            last,
+            Record::new(vec![
+                Field::pair("level", "warn"),
+                Field::pair("msg", "hello"),
+            ])
+        );
     }
 
     #[test]

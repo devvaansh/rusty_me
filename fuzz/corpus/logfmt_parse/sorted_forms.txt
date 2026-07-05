@@ -1,0 +1,5 @@
+debug level=info msg=hello
+level=warn msg="hello world" trace
+level=info msg=hello debug empty=
+a=1 b=2 c=3 d=4 e=5
+z=last a=first m=middle

@@ -26,8 +26,8 @@ pub use logfmt::{
     Document, Field, LineParseError, ParseError, ParseErrorKind, Record, Token, encode_fields,
     encode_lines, encode_map, encode_sorted, escape_value, key_is_valid, normalize,
     normalize_document, normalize_document_strict, normalize_lines, normalize_lines_strict,
-    normalize_strict, parse, parse_document, parse_document_lossy, parse_document_strict,
-    parse_fields, parse_flags, parse_lines, parse_lines_lossy, parse_lines_strict, parse_pairs,
-    parse_record, parse_record_strict, parse_strict, parse_to_map, parse_to_map_strict, tokenize,
-    unescape_value,
+    normalize_sorted, normalize_strict, parse, parse_document, parse_document_lossy,
+    parse_document_strict, parse_fields, parse_flags, parse_lines, parse_lines_lossy,
+    parse_lines_strict, parse_pairs, parse_record, parse_record_strict, parse_strict, parse_to_map,
+    parse_to_map_strict, tokenize, unescape_value,
 };

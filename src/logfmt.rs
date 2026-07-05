@@ -971,6 +971,12 @@ pub fn normalize_strict(input: &str) -> Result<String, ParseError> {
     parse_strict(input).map(|fields| encode_fields(&fields))
 }
 
+/// Parses and re-encodes logfmt input with keys in sorted order.
+#[must_use]
+pub fn normalize_sorted(input: &str) -> String {
+    encode_sorted(&parse_fields(input))
+}
+
 /// Parses and re-encodes newline-delimited logfmt input into normalized records.
 #[must_use]
 pub fn normalize_lines(input: &str) -> String {
@@ -1100,10 +1106,10 @@ mod tests {
         Document, Field, LineParseError, ParseError, ParseErrorKind, Record, Token, encode_fields,
         encode_lines, encode_map, encode_sorted, escape_value, key_is_valid, normalize,
         normalize_document, normalize_document_strict, normalize_lines, normalize_lines_strict,
-        normalize_strict, parse, parse_document, parse_document_lossy, parse_document_strict,
-        parse_fields, parse_flags, parse_lines, parse_lines_lossy, parse_lines_strict, parse_pairs,
-        parse_record, parse_record_strict, parse_strict, parse_to_map, parse_to_map_strict,
-        tokenize, unescape_value,
+        normalize_sorted, normalize_strict, parse, parse_document, parse_document_lossy,
+        parse_document_strict, parse_fields, parse_flags, parse_lines, parse_lines_lossy,
+        parse_lines_strict, parse_pairs, parse_record, parse_record_strict, parse_strict,
+        parse_to_map, parse_to_map_strict, tokenize, unescape_value,
     };
 
     #[test]
@@ -1923,6 +1929,15 @@ mod tests {
         let normalized = normalize_strict("debug level=info msg=\"hello world\"").unwrap();
 
         assert_eq!(normalized, "debug level=info msg=\"hello world\"");
+    }
+
+    #[test]
+    fn normalize_sorted_produces_alphabetical_key_order() {
+        assert_eq!(
+            normalize_sorted("msg=hello debug level=info"),
+            "debug level=info msg=hello"
+        );
+        assert_eq!(normalize_sorted(""), "");
     }
 
     #[test]

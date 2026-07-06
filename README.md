@@ -28,6 +28,18 @@ Typical flow:
 2. run `cargo fuzz run logfmt_parse`
 3. grow the seed corpus under `fuzz/corpus/logfmt_parse`
 
+## Examples
+
+Two runnable examples are included:
+
+```
+# normalize stdin, printing warnings for malformed lines to stderr
+cargo run --example normalize_logfmt < input.log
+
+# merge all lines into a single sorted record
+cargo run --example merge_logfmt < input.log
+```
+
 ## Current parser coverage
 
 The in-tree parser now handles a small but useful subset of `logfmt`:

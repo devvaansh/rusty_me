@@ -213,6 +213,19 @@ impl Record {
             .collect();
     }
 
+    /// Renames every field whose key equals `from` to `to`, returning the count of renamed fields.
+    pub fn rename_key(&mut self, from: &str, to: impl Into<String>) -> usize {
+        let to = to.into();
+        let mut count = 0;
+        for field in &mut self.fields {
+            if field.key == from {
+                field.key = to.clone();
+                count += 1;
+            }
+        }
+        count
+    }
+
     pub fn to_map(&self) -> std::collections::BTreeMap<String, Option<String>> {
         self.fields
             .iter()
@@ -1822,6 +1835,26 @@ mod tests {
         assert_eq!(
             last,
             Record::new(vec![
+                Field::pair("level", "warn"),
+                Field::pair("msg", "hello"),
+            ])
+        );
+    }
+
+    #[test]
+    fn record_rename_key_updates_all_matching_fields() {
+        let mut record = Record::new(vec![
+            Field::pair("log_level", "info"),
+            Field::pair("log_level", "warn"),
+            Field::pair("msg", "hello"),
+        ]);
+
+        assert_eq!(record.rename_key("log_level", "level"), 2);
+        assert_eq!(record.rename_key("absent", "x"), 0);
+        assert_eq!(
+            record,
+            Record::new(vec![
+                Field::pair("level", "info"),
                 Field::pair("level", "warn"),
                 Field::pair("msg", "hello"),
             ])

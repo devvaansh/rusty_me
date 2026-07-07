@@ -22,6 +22,7 @@ fuzz_target!(|data: &[u8]| {
         let encoded_record = record.encode();
         let encoded_document = document.encode();
         let normalized = rusty_me::normalize(input);
+        let normalized_sorted = rusty_me::normalize_sorted(input);
         let normalized_document = rusty_me::normalize_document(input);
         let normalized_lines = rusty_me::normalize_lines(input);
 
@@ -35,6 +36,10 @@ fuzz_target!(|data: &[u8]| {
         // encode_sorted must parse back to the same field set (different order)
         let sorted_parsed = rusty_me::parse_fields(&encoded_sorted);
         assert_eq!(sorted_parsed.len(), fields.len());
+
+        // normalize_sorted must also parse back identically
+        let norm_sorted_parsed = rusty_me::parse_fields(&normalized_sorted);
+        assert_eq!(norm_sorted_parsed.len(), fields.len());
 
         // flatten must yield all fields across all records
         let flat_count: usize = document.flatten().count();
